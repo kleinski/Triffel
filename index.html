@@ -41,7 +41,6 @@
             display: flex;
             gap: 1rem;
             justify-content: center;
-            margin-bottom: 1.5rem;
         }
         .dice {
             width: 60px;
@@ -87,7 +86,7 @@
         .face-5 { grid-template-areas: "a . b" ". c ." "d . e"; } .face-5 .dot:nth-child(1) { grid-area: a; } .face-5 .dot:nth-child(2) { grid-area: b; } .face-5 .dot:nth-child(3) { grid-area: c; } .face-5 .dot:nth-child(4) { grid-area: d; } .face-5 .dot:nth-child(5) { grid-area: e; }
         .face-6 { grid-template-areas: "a . b" "c . d" "e . f"; } .face-6 .dot:nth-child(1) { grid-area: a; } .face-6 .dot:nth-child(2) { grid-area: b; } .face-6 .dot:nth-child(3) { grid-area: c; } .face-6 .dot:nth-child(4) { grid-area: d; } .face-6 .dot:nth-child(5) { grid-area: e; } .face-6 .dot:nth-child(6) { grid-area: f; }
         @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0) rotate(-2deg); } 20%, 80% { transform: translate3d(2px, 0, 0) rotate(2deg); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0) rotate(-4deg); } 40%, 60% { transform: translate3d(4px, 0, 0) rotate(4deg); } }
-        .lcars-button { background-color: var(--lcars-blue); color: var(--lcars-bg); font-weight: 700; padding: 0.75rem 1.5rem; border: none; cursor: pointer; transition: background-color 0.2s; border-radius: 1.5rem 0 0 1.5rem; min-width: 150px; }
+        .lcars-button { background-color: var(--lcars-blue); color: var(--lcars-bg); font-weight: 700; padding: 0.75rem 1.5rem; border: none; cursor: pointer; transition: background-color 0.2s; border-radius: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
         .lcars-button:hover:not(:disabled) { background-color: var(--lcars-purple); }
         .lcars-button:disabled { background-color: #555; color: #999; cursor: not-allowed; }
         .score-cell { min-width: 40px; height: 36px; text-align: center; vertical-align: middle; font-weight: 700; transition: background-color 0.2s; border-color: #333; }
@@ -105,10 +104,11 @@
         .score-cell.strikeable:hover { background-color: var(--lcars-red-hover); }
         .score-cell.ai-thinking { background-color: var(--lcars-purple); color: var(--lcars-bg); transition: background-color 0.1s ease-in; }
         .score-cell.struck { text-decoration: line-through; color: #888; background-color: var(--lcars-filled-bg); }
-        .category-name { font-weight: 600; text-align: left; padding: 0.5rem; background-color: var(--lcars-purple); color: var(--lcars-bg); border-radius: 1rem 0 0 1rem; }
-        .player-header { background-color: var(--lcars-orange); color: var(--lcars-bg); padding: 0.5rem; font-size: 1rem; transition: background-color 0.3s ease-in-out; }
-        #player-header-p2 { background-color: var(--lcars-purple); }
-        .player-header.active-player { background-color: var(--lcars-blue); }
+        .category-name { font-weight: 600; text-align: left; padding: 0.5rem; background-color: var(--lcars-filled-bg); color: var(--lcars-filled-text); border-radius: 1rem 0 0 1rem; }
+        .player-header { background-color: var(--lcars-orange); color: var(--lcars-bg); padding: 0.5rem; font-size: 1rem; transition: background-color 0.3s ease-in-out, box-shadow 0.5s; }
+        #player-header-p2 { background-color: var(--lcars-orange); }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(102, 153, 255, 0.7); } 70% { box-shadow: 0 0 10px 15px rgba(102, 153, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(102, 153, 255, 0); } }
+        .player-header.active-player { background-color: var(--lcars-blue); animation: pulse 2s infinite; }
         .total-row { font-weight: bold; background-color: #222; }
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 50; transition: opacity 0.5s; }
         .modal-content { background-color: transparent; border: none; text-align: center; }
@@ -117,9 +117,7 @@
         .boarding-screen.active { opacity: 1; visibility: visible; }
         .boarding-text { color: var(--lcars-blue); font-size: 1.5rem; margin: 0.5rem; text-shadow: 0 0 5px var(--lcars-blue); opacity: 0; transition: opacity 0.5s; }
         .confetti { position: absolute; width: 10px; height: 10px; background-color: var(--lcars-orange); opacity: 0; z-index: 100; border-radius: 50%; }
-        #help-button-container { position: absolute; top: 1rem; right: 1rem; z-index: 40; }
-        #help-button { min-width: auto; padding: 0.5rem 1rem; border-radius: 0.5rem; }
-        /* NEW Divider Styles */
+        /* Divider Styles */
         .player-divider {
             border-left-width: 3px !important;
             border-left-color: var(--lcars-divider-color) !important;
@@ -128,13 +126,25 @@
             border-top-width: 3px !important;
             border-top-color: var(--lcars-divider-color) !important;
         }
+        .corner-button {
+            min-width: auto;
+            padding: 0.5rem 1rem;
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-4 md:p-8 relative">
 
-    <!-- Help Button -->
-    <div id="help-button-container">
-        <button id="help-button" class="lcars-button">HILFE</button>
+    <div id="score-button-container" style="position: absolute; top: 1rem; left: 1rem; z-index: 40;">
+        <button id="show-score-button" class="lcars-button corner-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            <span>PUNKTESTAND</span>
+        </button>
+    </div>
+    <div id="help-button-container" style="position: absolute; top: 1rem; right: 1rem; z-index: 40;">
+        <button id="help-button" class="lcars-button corner-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>HILFE</span>
+        </button>
     </div>
 
     <!-- Setup Screen -->
@@ -144,7 +154,7 @@
             <div id="setup-form">
                 <label for="player-name" class="block mb-2 font-bold text-left text-lcars-tan">CAPTAIN'S NAME:</label>
                 <input type="text" id="player-name" class="setup-input" value="kleinski">
-                <button id="start-game-button" class="w-full mt-4 lcars-button">MISSION STARTEN</button>
+                <button id="start-game-button" class="w-full mt-4 lcars-button justify-center">MISSION STARTEN</button>
             </div>
         </div>
     </div>
@@ -159,18 +169,13 @@
         <h1 class="text-3xl md:text-4xl font-bold text-center mb-6 text-lcars-orange">TRIFFEL</h1>
         <div class="lcars-container mb-6">
             <div class="flex flex-col items-center p-4">
-                <div id="dice-area" class="mb-4">
+                <div id="dice-area" class="w-full">
+                    <div id="rolls-left-icons" class="flex justify-center gap-2 mb-2 h-8"></div>
                     <div class="dice-container">
                         <div class="dice" data-index="0">?</div><div class="dice" data-index="1">?</div><div class="dice" data-index="2">?</div><div class="dice" data-index="3">?</div><div class="dice" data-index="4">?</div>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div id="game-status" class="text-lg font-semibold text-center text-lcars-tan">
-                        <p id="turn-info">Dein Zug</p>
-                        <div id="rolls-left-icons" class="flex justify-center gap-2 mt-2 h-8"></div>
-                    </div>
-                </div>
-                 <div class="mt-4 h-12 flex gap-4">
+                 <div class="mt-4 h-12 flex justify-center">
                     <button id="roll-button" class="lcars-button">WÜRFELN</button>
                 </div>
             </div>
@@ -188,7 +193,7 @@
         <div class="modal-content">
             <h2 id="winner-info" class="text-2xl font-bold mb-4 text-lcars-orange"></h2>
             <p id="final-scores" class="text-lg mb-6"></p>
-            <button id="new-game-button" class="lcars-button">NEUE MISSION</button>
+            <button id="new-game-button" class="lcars-button justify-center">NEUE MISSION</button>
         </div>
     </div>
     
@@ -217,7 +222,16 @@
                     </ul>
                 </div>
             </div>
-            <button id="close-help-button" class="w-1/2 mt-6 lcars-button">VERSTANDEN</button>
+            <button id="close-help-button" class="w-1/2 mt-6 lcars-button justify-center">VERSTANDEN</button>
+        </div>
+    </div>
+
+    <!-- Score Modal -->
+    <div id="score-modal" class="modal-backdrop hidden">
+        <div class="modal-content w-full max-w-lg lcars-container">
+            <h2 class="text-2xl font-bold mb-4 text-lcars-orange">PUNKTEÜBERSICHT</h2>
+            <div id="score-modal-content" class="text-lg"></div>
+            <button id="close-score-button" class="w-1/2 mt-6 lcars-button justify-center">SCHLIESSEN</button>
         </div>
     </div>
 
@@ -232,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const diceElements = document.querySelectorAll('.dice');
     const scoreboardHeader = document.getElementById('scoreboard-header');
     const scoreboardBody = document.getElementById('scoreboard-body');
-    const turnInfo = document.getElementById('turn-info');
     const rollsLeftIcons = document.getElementById('rolls-left-icons');
     const gameOverModal = document.getElementById('game-over-modal');
     const winnerInfo = document.getElementById('winner-info');
@@ -243,6 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpButton = document.getElementById('help-button');
     const helpModal = document.getElementById('help-modal');
     const closeHelpButton = document.getElementById('close-help-button');
+    const showScoreButton = document.getElementById('show-score-button');
+    const scoreModal = document.getElementById('score-modal');
+    const scoreModalContent = document.getElementById('score-modal-content');
+    const closeScoreButton = document.getElementById('close-score-button');
 
     // --- GAME STATE & CONSTANTS ---
     let state = {};
@@ -358,10 +375,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <th class="p-1 font-normal">x3 Wurf 1</th>
             </tr>`;
         scoreboardBody.innerHTML = '';
+        const dividerAfterRows = ['sixes', 'upperGrandTotal', 'chance'];
         CATEGORIES.forEach(cat => {
             const row = document.createElement('tr');
             if (cat.isTotal) row.classList.add('total-row');
-            if (['upperGrandTotal', 'lowerTotal', 'grandTotal'].includes(cat.id)) {
+            if (dividerAfterRows.includes(cat.id)) {
                 row.classList.add('section-divider');
             }
 
@@ -384,7 +402,8 @@ document.addEventListener('DOMContentLoaded', () => {
             die.innerHTML = createDieFace(state.dice[index], index);
             die.classList.toggle('kept', state.kept[index]);
         });
-        turnInfo.textContent = state.currentPlayer === 'player' ? 'DEIN ZUG' : `${state.computerName.toUpperCase()} IST AM ZUG`;
+        document.getElementById('player-header-p1').classList.toggle('active-player', state.currentPlayer === 'player');
+        document.getElementById('player-header-p2').classList.toggle('active-player', state.currentPlayer === 'computer');
         rollsLeftIcons.innerHTML = Array(state.rollsLeft).fill(dieIconSVG).join('');
         rollButton.disabled = state.rollsLeft === 0 || state.gamePhase === 'rolling';
         updateAllScoresUI();
@@ -402,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const score = state.scores[player][col][catId];
                     const cell = document.getElementById(`${player}-${catId}-${col}`);
                     if (cell) {
-                        // Cleanup all dynamic classes first
                         cell.classList.remove('filled', 'struck', 'available', 'strikeable', 'potential-score');
                         cell.innerHTML = ''; 
 
@@ -430,6 +448,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById(`${player}-grandTotal-${col}`).textContent = upperGrandTotal + lowerTotal;
             }
         });
+    }
+
+    function updateScoreModal() {
+        let playerFinalTotal = 0;
+        let computerFinalTotal = 0;
+        let playerTotals = [];
+        let computerTotals = [];
+
+        for (let i = 1; i <= 4; i++) {
+            const col = `col${i}`;
+            const multiplier = COLUMN_MULTIPLIERS[col];
+            
+            const playerColTotal = parseInt(document.getElementById(`player-grandTotal-${col}`).textContent || '0');
+            playerTotals.push(playerColTotal * multiplier);
+            playerFinalTotal += playerColTotal * multiplier;
+
+            const computerColTotal = parseInt(document.getElementById(`computer-grandTotal-${col}`).textContent || '0');
+            computerTotals.push(computerColTotal * multiplier);
+            computerFinalTotal += computerColTotal * multiplier;
+        }
+
+        scoreModalContent.innerHTML = `
+            <table class="w-full text-center">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th class="p-2">${state.playerName.toUpperCase()}</th>
+                        <th class="p-2">${state.computerName.toUpperCase()}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td class="text-left p-2">Spalte 1 (x1)</td><td>${playerTotals[0]}</td><td>${computerTotals[0]}</td></tr>
+                    <tr><td class="text-left p-2">Spalte 2 (x2)</td><td>${playerTotals[1]}</td><td>${computerTotals[1]}</td></tr>
+                    <tr><td class="text-left p-2">Spalte 3 (x2)</td><td>${playerTotals[2]}</td><td>${computerTotals[2]}</td></tr>
+                    <tr><td class="text-left p-2">Spalte 4 (x3)</td><td>${playerTotals[3]}</td><td>${computerTotals[3]}</td></tr>
+                    <tr class="text-lcars-orange text-2xl section-divider"><td class="text-left p-2">GESAMT</td><td>${playerFinalTotal}</td><td>${computerFinalTotal}</td></tr>
+                </tbody>
+            </table>
+        `;
     }
     
     function highlightAvailableCells() {
@@ -539,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         endTurn();
     }
     function endTurn() {if (state.turn >= TOP_DOWN_ORDER.length * 4) {gameOver();return;}if (state.currentPlayer === 'computer') state.turn++;state.currentPlayer = state.currentPlayer === 'player' ? 'computer' : 'player';startTurn();}
-    function gameOver() {state.gamePhase = 'gameOver';let playerScore = 0, computerScore = 0;['player', 'computer'].forEach(p => {let total = 0;for (let i = 1; i <= 4; i++) {const col = `col${i}`;const grandTotalCell = document.getElementById(`${p}-grandTotal-${col}`);if(grandTotalCell){total += parseInt(grandTotalCell.textContent || '0') * COLUMN_MULTIPLIERS[col];}}if (p === 'player') playerScore = total; else computerScore = total;});if (playerScore > computerScore) winnerInfo.textContent = `${state.playerName.toUpperCase()} HAT GEWONNEN!`;else if (computerScore > playerScore) winnerInfo.textContent = `${state.computerName.toUpperCase()} HAT GEWONNEN!`;else winnerInfo.textContent = "UNENTSCHIEDEN!";finalScores.textContent = `ENDERGEBNIS: ${playerScore} | ${state.computerName.toUpperCase()}: ${computerScore}`;gameOverModal.classList.remove('hidden');}
+    function gameOver() {state.gamePhase = 'gameOver';updateScoreModal(); let playerScore = 0; let computerScore = 0; for(let i=1; i<=4; i++){playerScore += (parseInt(document.getElementById(`player-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`]; computerScore += (parseInt(document.getElementById(`computer-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`];} if (playerScore > computerScore) winnerInfo.textContent = `${state.playerName.toUpperCase()} HAT GEWONNEN!`;else if (computerScore > playerScore) winnerInfo.textContent = `${state.computerName.toUpperCase()} HAT GEWONNEN!`;else winnerInfo.textContent = "UNENTSCHIEDEN!";finalScores.textContent = `ENDERGEBNIS: ${playerScore} | ${state.computerName.toUpperCase()}: ${computerScore}`;gameOverModal.classList.remove('hidden');}
     function calculateScore(category, dice) {const counts = Array(6).fill(0);let sum = 0;dice.forEach(d => { counts[d - 1]++; sum += d; });switch (category) {case 'ones': return counts[0] * 1;case 'twos': return counts[1] * 2;case 'threes': return counts[2] * 3;case 'fours': return counts[3] * 4;case 'fives': return counts[4] * 5;case 'sixes': return counts[5] * 6;case 'threeOfAKind': return counts.some(c => c >= 3) ? sum : 0;case 'fourOfAKind': return counts.some(c => c >= 4) ? sum : 0;case 'Full House': return counts.includes(3) && counts.includes(2) ? 25 : 0;case 'kniffel': return counts.some(c => c >= 5) ? 50 : 0;case 'chance': return sum;case 'smallStraight': return /1234|2345|3456/.test([...new Set(dice)].sort().join('')) ? 30 : 0;case 'largeStraight': return /12345|23456/.test([...new Set(dice)].sort().join('')) ? 40 : 0;default: return 0;}}
     function triggerConfetti(element) {if(!element) return; const rect = element.getBoundingClientRect();const colors = ['#FF9900', '#6699FF', '#CC99FF', '#FFCC99'];for (let i = 0; i < 50; i++) {const confetti = document.createElement('div');confetti.className = 'confetti';document.body.appendChild(confetti);confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];confetti.style.left = rect.left + rect.width / 2 + 'px';confetti.style.top = rect.top + rect.height / 2 + 'px';const angle = Math.random() * Math.PI * 2;const velocity = Math.random() * 50 + 50;const x = Math.cos(angle) * velocity;const y = Math.sin(angle) * velocity - 50;confetti.style.transition = 'transform 1s ease-out, opacity 1s ease-out';confetti.style.opacity = 1;setTimeout(() => {confetti.style.transform = `translate(${x}px, ${y + 100}px) rotate(360deg)`;confetti.style.opacity = 0;}, 10);setTimeout(() => { confetti.remove(); }, 1010);}}
     
@@ -571,7 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     bestMove = { action: determineOptimalStrike() };
                 }
 
-                executeComputerMove(bestMove.action);
+                await executeComputerMove(bestMove.action, possibleMoves);
                 return;
 
             } else if (action === 'REROLL') {
@@ -582,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      const finalDice = currentDice;
                      const possibleMoves = evaluatePlacements(finalDice, firstRollDice, rollsRemaining === 2);
                      const bestMove = possibleMoves.length > 0 ? possibleMoves.reduce((best, current) => current.efs > best.efs ? current : best) : { action: determineOptimalStrike() };
-                     executeComputerMove(bestMove.action);
+                     await executeComputerMove(bestMove.action, possibleMoves);
                      return;
                 }
 
@@ -749,17 +806,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return false;
     }
 
-    async function executeComputerMove(move) {
+    async function animateAIThinking(possibleMoves) {
+        const thinkCount = Math.min(possibleMoves.length, 3);
+        const shuffledMoves = [...possibleMoves].sort(() => 0.5 - Math.random());
+        for (let i = 0; i < thinkCount; i++) {
+            const move = shuffledMoves[i].action;
+            if (!move) continue;
+            const cell = document.getElementById(`computer-${move.category}-${move.column}`);
+            if (cell) {
+                cell.classList.add('ai-thinking');
+                await new Promise(res => setTimeout(res, 300));
+                cell.classList.remove('ai-thinking');
+            }
+        }
+    }
+
+    async function executeComputerMove(move, possibleMoves) {
         if (!move || !move.column || !move.category) { endTurn(); return; }
 
         computerChatterSeq.start(0);
         Tone.Transport.start();
-        await new Promise(res => setTimeout(res, 1500)); // "Thinking" time
+        await animateAIThinking(possibleMoves);
         computerChatterSeq.stop();
         Tone.Transport.stop();
 
         const score = move.rawScore;
         state.scores.computer[move.column][move.category] = score;
+        
+        const chosenCell = document.getElementById(`computer-${move.category}-${move.column}`);
+        if(chosenCell) {
+            chosenCell.style.transition = 'background-color 0.2s';
+            chosenCell.style.backgroundColor = 'var(--lcars-orange)';
+            await new Promise(res => setTimeout(res, 1000));
+            chosenCell.style.backgroundColor = '';
+        }
         
         endTurn();
     }
@@ -772,6 +852,11 @@ document.addEventListener('DOMContentLoaded', () => {
     rollButton.addEventListener('click', rollDice);
     helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
     closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
+    showScoreButton.addEventListener('click', () => {
+        updateScoreModal();
+        scoreModal.classList.remove('hidden');
+    });
+    closeScoreButton.addEventListener('click', () => scoreModal.classList.add('hidden'));
     diceElements.forEach(die => { die.addEventListener('click', () => toggleKeep(parseInt(die.dataset.index))); });
     scoreboardBody.addEventListener('click', (e) => {
         const cell = e.target.closest('.score-cell');
