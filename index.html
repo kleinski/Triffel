@@ -63,8 +63,15 @@
             background-color: var(--lcars-purple);
             border-color: var(--lcars-tan);
         }
+        @keyframes better-roll {
+            0%   { transform: translateY(0px) rotate(0deg); }
+            25%  { transform: translateY(-10px) rotate(90deg); }
+            50%  { transform: translateY(0px) rotate(180deg); }
+            75%  { transform: translateY(-5px) rotate(270deg); }
+            100% { transform: translateY(0px) rotate(360deg); }
+        }
         .dice.rolling {
-            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) infinite;
+            animation: better-roll 0.6s ease-in-out infinite;
         }
         .lock-icon {
             position: absolute;
@@ -85,11 +92,10 @@
         .face-4 { grid-template-areas: "a . b" ". . ." "c . d"; } .face-4 .dot:nth-child(1) { grid-area: a; } .face-4 .dot:nth-child(2) { grid-area: b; } .face-4 .dot:nth-child(3) { grid-area: c; } .face-4 .dot:nth-child(4) { grid-area: d; }
         .face-5 { grid-template-areas: "a . b" ". c ." "d . e"; } .face-5 .dot:nth-child(1) { grid-area: a; } .face-5 .dot:nth-child(2) { grid-area: b; } .face-5 .dot:nth-child(3) { grid-area: c; } .face-5 .dot:nth-child(4) { grid-area: d; } .face-5 .dot:nth-child(5) { grid-area: e; }
         .face-6 { grid-template-areas: "a . b" "c . d" "e . f"; } .face-6 .dot:nth-child(1) { grid-area: a; } .face-6 .dot:nth-child(2) { grid-area: b; } .face-6 .dot:nth-child(3) { grid-area: c; } .face-6 .dot:nth-child(4) { grid-area: d; } .face-6 .dot:nth-child(5) { grid-area: e; } .face-6 .dot:nth-child(6) { grid-area: f; }
-        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0) rotate(-2deg); } 20%, 80% { transform: translate3d(2px, 0, 0) rotate(2deg); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0) rotate(-4deg); } 40%, 60% { transform: translate3d(4px, 0, 0) rotate(4deg); } }
         .lcars-button { background-color: var(--lcars-blue); color: var(--lcars-bg); font-weight: 700; padding: 0.75rem 1.5rem; border: none; cursor: pointer; transition: background-color 0.2s; border-radius: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
         .lcars-button:hover:not(:disabled) { background-color: var(--lcars-purple); }
         .lcars-button:disabled { background-color: #555; color: #999; cursor: not-allowed; }
-        .score-cell { min-width: 40px; height: 36px; text-align: center; vertical-align: middle; font-weight: 700; transition: background-color 0.2s; border-color: #333; }
+        .score-cell { min-width: 40px; height: 36px; text-align: center; vertical-align: middle; font-weight: 700; transition: background-color 0.2s, box-shadow 0.3s; border-color: #333; }
         .score-cell.available { cursor: pointer; }
         .score-cell.available.potential-score { background-color: var(--lcars-purple-translucent); }
         .score-cell.available.potential-score:hover { background-color: var(--lcars-purple); }
@@ -104,9 +110,9 @@
         .score-cell.strikeable:hover { background-color: var(--lcars-red-hover); }
         .score-cell.ai-thinking { background-color: var(--lcars-purple); color: var(--lcars-bg); transition: background-color 0.1s ease-in; }
         .score-cell.struck { text-decoration: line-through; color: #888; background-color: var(--lcars-filled-bg); }
+        .score-cell.last-ai-move { box-shadow: inset 0 0 8px 2px var(--lcars-orange); }
         .category-name { font-weight: 600; text-align: left; padding: 0.5rem; background-color: var(--lcars-filled-bg); color: var(--lcars-filled-text); border-radius: 1rem 0 0 1rem; }
-        .player-header { background-color: var(--lcars-orange); color: var(--lcars-bg); padding: 0.5rem; font-size: 1rem; transition: background-color 0.3s ease-in-out, box-shadow 0.5s; }
-        #player-header-p2 { background-color: var(--lcars-orange); }
+        .player-header { background-color: var(--lcars-filled-bg); color: var(--lcars-filled-text); padding: 0.5rem; font-size: 1rem; transition: background-color 0.3s ease-in-out, box-shadow 0.5s; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(102, 153, 255, 0.7); } 70% { box-shadow: 0 0 10px 15px rgba(102, 153, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(102, 153, 255, 0); } }
         .player-header.active-player { background-color: var(--lcars-blue); animation: pulse 2s infinite; }
         .total-row { font-weight: bold; background-color: #222; }
@@ -123,8 +129,8 @@
             border-left-color: var(--lcars-divider-color) !important;
         }
         .section-divider > td {
-            border-top-width: 3px !important;
-            border-top-color: var(--lcars-divider-color) !important;
+            border-top-width: 1px !important;
+            border-top-color: #333 !important;
         }
         .corner-button {
             min-width: auto;
@@ -137,17 +143,6 @@
     </style>
 </head>
 <body class="p-4 md:p-8 relative">
-
-    <div id="score-button-container" style="position: absolute; top: 1rem; left: 1rem; z-index: 40;">
-        <button id="show-score-button" class="lcars-button corner-button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-        </button>
-    </div>
-    <div id="help-button-container" style="position: absolute; top: 1rem; right: 1rem; z-index: 40;">
-        <button id="help-button" class="lcars-button corner-button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        </button>
-    </div>
 
     <!-- Setup Screen -->
     <div id="setup-screen" class="modal-backdrop flex">
@@ -169,7 +164,17 @@
     <!-- Game Container -->
     <div id="game-container" class="max-w-7xl mx-auto hidden">
         <h1 class="text-3xl md:text-4xl font-bold text-center mb-6 text-lcars-orange">TRIFFEL</h1>
-        <div class="lcars-container mb-6">
+        <div class="lcars-container mb-6 relative">
+             <div id="score-button-container" style="position: absolute; top: 1rem; left: 1rem; z-index: 40;">
+                <button id="show-score-button" class="lcars-button corner-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                </button>
+            </div>
+            <div id="help-button-container" style="position: absolute; top: 1rem; right: 1rem; z-index: 40;">
+                <button id="help-button" class="lcars-button corner-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </button>
+            </div>
             <div class="flex flex-col items-center p-4">
                 <div id="dice-area" class="w-full">
                     <div id="rolls-left-icons" class="flex justify-center gap-2 mb-2 h-8"></div>
@@ -192,10 +197,10 @@
     
     <!-- Game Over Modal -->
     <div id="game-over-modal" class="modal-backdrop hidden">
-        <div class="modal-content">
+        <div class="modal-content w-full max-w-lg lcars-container">
             <h2 id="winner-info" class="text-2xl font-bold mb-4 text-lcars-orange"></h2>
-            <p id="final-scores" class="text-lg mb-6"></p>
-            <button id="new-game-button" class="lcars-button justify-center">NEUE MISSION</button>
+            <div id="final-scores-table" class="text-lg mb-6"></div>
+            <button id="new-game-button" class="w-1/2 mt-6 lcars-button justify-center">NEUE MISSION</button>
         </div>
     </div>
     
@@ -237,6 +242,13 @@
         </div>
     </div>
 
+    <!-- Mission Analysis Modal -->
+    <div id="mission-analysis-modal" class="modal-backdrop hidden">
+        <div class="modal-content w-full max-w-lg">
+            <div id="mission-analysis-text-container" class="text-left"></div>
+        </div>
+    </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM ELEMENTS ---
@@ -251,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const rollsLeftIcons = document.getElementById('rolls-left-icons');
     const gameOverModal = document.getElementById('game-over-modal');
     const winnerInfo = document.getElementById('winner-info');
-    const finalScores = document.getElementById('final-scores');
+    const finalScoresTable = document.getElementById('final-scores-table');
     const newGameButton = document.getElementById('new-game-button');
     const boardingScreen = document.getElementById('boarding-screen');
     const boardingTextContainer = document.getElementById('boarding-text-container');
@@ -262,6 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const scoreModal = document.getElementById('score-modal');
     const scoreModalContent = document.getElementById('score-modal-content');
     const closeScoreButton = document.getElementById('close-score-button');
+    const missionAnalysisModal = document.getElementById('mission-analysis-modal');
+    const missionAnalysisTextContainer = document.getElementById('mission-analysis-text-container');
 
     // --- GAME STATE & CONSTANTS ---
     let state = {};
@@ -297,6 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             turn: 1,
             scores: { player: createPlayerScores(), computer: createPlayerScores() },
             hasRolledMoreThanOnce: false,
+            lastAiMove: null,
         };
         gameContainer.classList.remove('hidden');
         buildScoreboard();
@@ -403,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         diceElements.forEach((die, index) => {
             die.innerHTML = createDieFace(state.dice[index], index);
             die.classList.toggle('kept', state.kept[index]);
+            die.classList.toggle('rolling', state.gamePhase === 'rolling' && !state.kept[index]);
         });
         document.getElementById('player-header-p1').classList.toggle('active-player', state.currentPlayer === 'player');
         document.getElementById('player-header-p2').classList.toggle('active-player', state.currentPlayer === 'computer');
@@ -423,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const score = state.scores[player][col][catId];
                     const cell = document.getElementById(`${player}-${catId}-${col}`);
                     if (cell) {
-                        cell.classList.remove('filled', 'struck', 'available', 'strikeable', 'potential-score');
+                        cell.classList.remove('filled', 'struck', 'available', 'strikeable', 'potential-score', 'last-ai-move');
                         cell.innerHTML = ''; 
 
                         if (score !== null) {
@@ -450,9 +466,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById(`${player}-grandTotal-${col}`).textContent = upperGrandTotal + lowerTotal;
             }
         });
+        if (state.lastAiMove) {
+            const lastCell = document.getElementById(`computer-${state.lastAiMove.category}-${state.lastAiMove.column}`);
+            if (lastCell) lastCell.classList.add('last-ai-move');
+        }
     }
 
-    function updateScoreModal() {
+    function getFinalScoresHTML() {
         let playerFinalTotal = 0;
         let computerFinalTotal = 0;
         let playerTotals = [];
@@ -471,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
             computerFinalTotal += computerColTotal * multiplier;
         }
 
-        scoreModalContent.innerHTML = `
+        return `
             <table class="w-full text-center">
                 <thead>
                     <tr>
@@ -489,6 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </tbody>
             </table>
         `;
+    }
+
+    function updateScoreModal() {
+        scoreModalContent.innerHTML = getFinalScoresHTML();
     }
     
     function highlightAvailableCells() {
@@ -541,6 +565,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GAME LOGIC ---
     function startTurn() {
+        if (state.turn > TOP_DOWN_ORDER.length * 4) {
+            gameOver();
+            return;
+        }
+
+        if (state.lastAiMove) {
+            const lastCell = document.getElementById(`computer-${state.lastAiMove.category}-${state.lastAiMove.column}`);
+            if (lastCell) lastCell.classList.remove('last-ai-move');
+            state.lastAiMove = null;
+        }
         state.rollsLeft = 3;
         state.kept = [false, false, false, false, false];
         state.dice = [0,0,0,0,0];
@@ -551,10 +585,16 @@ document.addEventListener('DOMContentLoaded', () => {
         else render();
     }
     async function animateAndRollDice(diceToRollCount) {
-        const rollDuration = Math.random() * 1000 + 1500;
+        const rollDuration = 1200;
         if (diceToRollCount > 1) {Tone.Transport.start();shakeLoop.start(0);} 
         else if (diceToRollCount === 1) {singleHit.triggerAttackRelease("C2", "8n");}
         state.gamePhase = 'rolling';
+        
+        diceElements.forEach((die, index) => {
+            if (!state.kept[index]) {
+                die.style.animationDelay = `${Math.random() * 0.2}s`;
+            }
+        });
         render();
         
         await new Promise(resolve => setTimeout(resolve, rollDuration));
@@ -565,6 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!state.kept[index]) {
                 state.dice[index] = Math.floor(Math.random() * 6) + 1;
             }
+            die.style.animationDelay = '';
         });
     }
     
@@ -590,11 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.firstRollDice = [...state.dice];
         }
         
-        if (state.rollsLeft === 0) {
-            state.gamePhase = 'scoring';
-        } else {
-            state.gamePhase = 'afterRoll';
-        }
+        state.gamePhase = state.rollsLeft === 0 ? 'scoring' : 'afterRoll';
         render();
     }
 
@@ -613,8 +650,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         endTurn();
     }
-    function endTurn() {if (state.turn >= TOP_DOWN_ORDER.length * 4) {gameOver();return;}if (state.currentPlayer === 'computer') state.turn++;state.currentPlayer = state.currentPlayer === 'player' ? 'computer' : 'player';startTurn();}
-    function gameOver() {state.gamePhase = 'gameOver';updateScoreModal(); let playerScore = 0; let computerScore = 0; for(let i=1; i<=4; i++){playerScore += (parseInt(document.getElementById(`player-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`]; computerScore += (parseInt(document.getElementById(`computer-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`];} if (playerScore > computerScore) winnerInfo.textContent = `${state.playerName.toUpperCase()} HAT GEWONNEN!`;else if (computerScore > playerScore) winnerInfo.textContent = `${state.computerName.toUpperCase()} HAT GEWONNEN!`;else winnerInfo.textContent = "UNENTSCHIEDEN!";finalScores.textContent = `ENDERGEBNIS: ${playerScore} | ${state.computerName.toUpperCase()}: ${computerScore}`;gameOverModal.classList.remove('hidden');}
+    function endTurn() {
+        if (state.currentPlayer === 'computer') {
+            state.turn++;
+        }
+        state.currentPlayer = state.currentPlayer === 'player' ? 'computer' : 'player';
+        startTurn();
+    }
+    async function gameOver() {
+        state.gamePhase = 'gameOver';
+        missionAnalysisModal.classList.remove('hidden');
+        const lines = ["MISSIONSDATEN WERDEN ANALYSIERT...", "BERECHNE EFFIZIENZ-MATRIX...", "WAHRSCHEINLICHKEITS-PROTOKOLLE WERDEN ABGESCHLOSSEN...", "FINALE AUSWERTUNG VERFÜGBAR."];
+        missionAnalysisTextContainer.innerHTML = '';
+        for (const line of lines) {
+            const p = document.createElement('p');
+            p.className = 'boarding-text';
+            p.textContent = line;
+            missionAnalysisTextContainer.appendChild(p);
+            computerVoice.triggerAttackRelease("C2", "8n");
+            await new Promise(r => setTimeout(r, 100));
+            p.style.opacity = 1;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+        missionAnalysisModal.classList.add('hidden');
+
+        finalScoresTable.innerHTML = getFinalScoresHTML();
+        let playerScore = 0;
+        let computerScore = 0;
+        for(let i=1; i<=4; i++){
+            playerScore += (parseInt(document.getElementById(`player-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`];
+            computerScore += (parseInt(document.getElementById(`computer-grandTotal-col${i}`).textContent) || 0) * COLUMN_MULTIPLIERS[`col${i}`];
+        }
+
+        if (playerScore > computerScore) {
+            winnerInfo.textContent = `${state.playerName.toUpperCase()} HAT GEWONNEN!`;
+        } else if (computerScore > playerScore) {
+            winnerInfo.textContent = `${state.computerName.toUpperCase()} HAT GEWONNEN!`;
+        } else {
+            winnerInfo.textContent = "UNENTSCHIEDEN!";
+        }
+        gameOverModal.classList.remove('hidden');
+    }
     function calculateScore(category, dice) {const counts = Array(6).fill(0);let sum = 0;dice.forEach(d => { counts[d - 1]++; sum += d; });switch (category) {case 'ones': return counts[0] * 1;case 'twos': return counts[1] * 2;case 'threes': return counts[2] * 3;case 'fours': return counts[3] * 4;case 'fives': return counts[4] * 5;case 'sixes': return counts[5] * 6;case 'threeOfAKind': return counts.some(c => c >= 3) ? sum : 0;case 'fourOfAKind': return counts.some(c => c >= 4) ? sum : 0;case 'Full House': return counts.includes(3) && counts.includes(2) ? 25 : 0;case 'kniffel': return counts.some(c => c >= 5) ? 50 : 0;case 'chance': return sum;case 'smallStraight': return /1234|2345|3456/.test([...new Set(dice)].sort().join('')) ? 30 : 0;case 'largeStraight': return /12345|23456/.test([...new Set(dice)].sort().join('')) ? 40 : 0;default: return 0;}}
     function triggerConfetti(element) {if(!element) return; const rect = element.getBoundingClientRect();const colors = ['#FF9900', '#6699FF', '#CC99FF', '#FFCC99'];for (let i = 0; i < 50; i++) {const confetti = document.createElement('div');confetti.className = 'confetti';document.body.appendChild(confetti);confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];confetti.style.left = rect.left + rect.width / 2 + 'px';confetti.style.top = rect.top + rect.height / 2 + 'px';const angle = Math.random() * Math.PI * 2;const velocity = Math.random() * 50 + 50;const x = Math.cos(angle) * velocity;const y = Math.sin(angle) * velocity - 50;confetti.style.transition = 'transform 1s ease-out, opacity 1s ease-out';confetti.style.opacity = 1;setTimeout(() => {confetti.style.transform = `translate(${x}px, ${y + 100}px) rotate(360deg)`;confetti.style.opacity = 0;}, 10);setTimeout(() => { confetti.remove(); }, 1010);}}
     
@@ -629,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.dice = [0,0,0,0,0];
         state.kept = [false,false,false,false,false];
         render();
-        await new Promise(res => setTimeout(res, 500));
+        await new Promise(res => setTimeout(res, 1500));
 
         await animateAndRollDice(5);
         state.gamePhase = 'computerTurn';
@@ -658,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (action === 'REROLL') {
                 state.kept = bestKeepDecision;
                 render();
-                await new Promise(res => setTimeout(res, 1200));
+                await new Promise(res => setTimeout(res, 2000));
 
                 const diceToRollCount = bestKeepDecision.filter(k => !k).length;
                 
@@ -827,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return index === 0 || state.scores.computer[column][TOP_DOWN_ORDER[index - 1]] !== null;
         }
         if (colNum === 3) {
-            const reversedOrder = [...TOP_DOWN_ORDER].reverse();
+            const reversedOrder = [...new Set(TOP_DOWN_ORDER)].reverse();
             const index = reversedOrder.indexOf(category);
             return index === 0 || state.scores.computer[column][reversedOrder[index - 1]] !== null;
         }
@@ -860,6 +938,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const score = move.rawScore;
         state.scores.computer[move.column][move.category] = score;
+        state.lastAiMove = { category: move.category, column: move.column };
         
         const chosenCell = document.getElementById(`computer-${move.category}-${move.column}`);
         if(chosenCell) {
