@@ -716,7 +716,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function rollDice() {
         if (state.rollsLeft <= 0 || state.currentPlayer !== 'player' || state.gamePhase === 'rolling') return;
-        
         const diceToRollCount = state.kept.filter(k => !k).length;
         if (diceToRollCount === 0 && state.rollsLeft > 0) {
             state.rollsLeft = 0;
@@ -724,18 +723,28 @@ document.addEventListener('DOMContentLoaded', () => {
             render();
             return;
         }
-
         if (state.rollsLeft < 3) {
             state.hasRolledMoreThanOnce = true;
         }
-
         state.rollsLeft--;
         await animateAndRollDice(diceToRollCount);
+
+        // --- LOGGING: Spieler-Wurf ---
+        if (state.settings.logGame) {
+            state.gameLog.push({
+                type: 'roll',
+                player: 'player',
+                dice: state.dice.slice(),
+                kept: state.kept.slice(),
+                turn: state.turn,
+                rollsLeft: state.rollsLeft,
+                timestamp: Date.now()
+            });
+        }
 
         if (state.rollsLeft === 2) {
             state.firstRollDice = [...state.dice];
         }
-        
         state.gamePhase = state.rollsLeft === 0 ? 'scoring' : 'afterRoll';
         render();
         if (state.settings.screenshots) {
@@ -743,7 +752,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function toggleKeep(index) {if (state.gamePhase === 'rolling' || state.rollsLeft === 3) return;state.kept[index] = !state.kept[index];render();}
     async function selectScore(category, column) {
         state.lastPlayerState = JSON.parse(JSON.stringify(state));
 
@@ -758,6 +766,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (category === 'kniffel' && score === 50) {
             triggerConfetti(cell);
         }
+
+        // --- LOGGING: Spieler-Eintrag/Streichen ---
+        if (state.settings.logGame) {
+            state.gameLog.push({
+                type: isStrike ? 'strike' : 'entry',
+                player: 'player',
+                category,
+                column,
+                score,
+                dice: diceToUse.slice(),
+                turn: state.turn,
+                rollsLeft: state.rollsLeft,
+                timestamp: Date.now()
+            });
+        }
+
         if (state.settings.screenshots) {
             await takeScreenshot(`triffel_zug_${state.turn}_eintrag_${category}.png`);
         }
@@ -830,6 +854,45 @@ document.addEventListener('DOMContentLoaded', () => {
             const logDownload = document.getElementById('log-download-link');
             if (logDownload) logDownload.style.display = 'none';
         }
+
+        // Nach dem finalScoresTable.innerHTML = getFinalScoresHTML(); und vor gameOverModal.classList.remove('hidden');
+        const buttonRow = document.createElement('div');
+        buttonRow.className = 'flex flex-row justify-between items-center gap-4 mt-6';
+
+        // Download-Button nur anzeigen, wenn aktiviert und Daten vorhanden
+        let logDownload = document.getElementById('log-download-link');
+        if (logDownload) logDownload.remove();
+
+        if (state.settings.logGame && state.gameLog && state.gameLog.length > 0) {
+            // CSV erzeugen
+            const csvHeader = Object.keys(state.gameLog[0]).join(';');
+            const csvRows = state.gameLog.map(entry =>
+                Object.values(entry).map(v =>
+                    typeof v === 'string' && v.includes(';') ? `"${v.replace(/"/g, '""')}"` : v
+                ).join(';')
+            );
+            const csvContent = [csvHeader, ...csvRows].join('\r\n');
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+
+            logDownload = document.createElement('a');
+            logDownload.id = 'log-download-link';
+            logDownload.className = 'lcars-button';
+            logDownload.textContent = 'Download Protokoll';
+            logDownload.href = url;
+            logDownload.download = `triffel_log_${Date.now()}.csv`;
+            buttonRow.appendChild(logDownload);
+        }
+
+        // "Neue Mission"-Button nach rechts
+        newGameButton.classList.add('ml-auto');
+        buttonRow.appendChild(newGameButton);
+
+        // Button-Row einfügen (vorher ggf. entfernen)
+        const modalContent = gameOverModal.querySelector('.modal-content');
+        const oldButtonRow = modalContent.querySelector('.flex.flex-row');
+        if (oldButtonRow) oldButtonRow.remove();
+        modalContent.appendChild(buttonRow);
     }
     function calculateScore(category, dice) {const counts = Array(6).fill(0);let sum = 0;dice.forEach(d => { counts[d - 1]++; sum += d; });switch (category) {case 'ones': return counts[0] * 1;case 'twos': return counts[1] * 2;case 'threes': return counts[2] * 3;case 'fours': return counts[3] * 4;case 'fives': return counts[4] * 5;case 'sixes': return counts[5] * 6;case 'threeOfAKind': return counts.some(c => c >= 3) ? sum : 0;case 'fourOfAKind': return counts.some(c => c >= 4) ? sum : 0;case 'Full House': return counts.includes(3) && counts.includes(2) ? 25 : 0;case 'kniffel': return counts.some(c => c >= 5) ? 50 : 0;case 'chance': return sum;case 'smallStraight': return /1234|2345|3456/.test([...new Set(dice)].sort().join('')) ? 30 : 0;case 'largeStraight': return /12345|23456/.test([...new Set(dice)].sort().join('')) ? 40 : 0;default: return 0;}}
     function triggerConfetti(element) {if(!element) return; const rect = element.getBoundingClientRect();const colors = ['#FF9900', '#6699FF', '#CC99FF', '#FFCC99'];for (let i = 0; i < 50; i++) {const confetti = document.createElement('div');confetti.className = 'confetti';document.body.appendChild(confetti);confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];confetti.style.left = rect.left + rect.width / 2 + 'px';confetti.style.top = rect.top + rect.height / 2 + 'px';const angle = Math.random() * Math.PI * 2;const velocity = Math.random() * 50 + 50;const x = Math.cos(angle) * velocity;const y = Math.sin(angle) * velocity - 50;confetti.style.transition = 'transform 1s ease-out, opacity 1s ease-out';confetti.style.opacity = 1;setTimeout(() => {confetti.style.transform = `translate(${x}px, ${y + 100}px) rotate(360deg)`;confetti.style.opacity = 0;}, 10);setTimeout(() => { confetti.remove(); }, 1010);}}
@@ -846,8 +909,21 @@ document.addEventListener('DOMContentLoaded', () => {
         state.kept = [false,false,false,false,false];
         render();
         await new Promise(res => setTimeout(res, 1500));
-
         await animateAndRollDice(5);
+
+        // --- LOGGING: KI-Wurf (erster Wurf) ---
+        if (state.settings.logGame) {
+            state.gameLog.push({
+                type: 'roll',
+                player: 'computer',
+                dice: state.dice.slice(),
+                kept: state.kept.slice(),
+                turn: state.turn,
+                rollsLeft: state.rollsLeft,
+                timestamp: Date.now()
+            });
+        }
+
         state.gamePhase = 'computerTurn';
         render();
         currentDice = [...state.dice];
@@ -864,18 +940,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.kept = decision.wuerfelBehalten;
                 render();
                 await new Promise(res => setTimeout(res, 2000));
-
                 const diceToRollCount = state.kept.filter(k => !k).length;
-                
                 if (diceToRollCount === 0 || rollsRemaining === 0) {
-                     const finalDecision = aiDecision(currentDice, 0, firstRollDice);
-                     await executeComputerMove(finalDecision);
-                     return;
+                    const finalDecision = aiDecision(currentDice, 0, firstRollDice);
+                    await executeComputerMove(finalDecision);
+                    return;
                 }
-
                 rollsRemaining--;
                 state.rollsLeft = rollsRemaining;
                 await animateAndRollDice(diceToRollCount);
+
+                // --- LOGGING: KI-Wurf (weitere Würfe) ---
+                if (state.settings.logGame) {
+                    state.gameLog.push({
+                        type: 'roll',
+                        player: 'computer',
+                        dice: state.dice.slice(),
+                        kept: state.kept.slice(),
+                        turn: state.turn,
+                        rollsLeft: state.rollsLeft,
+                        timestamp: Date.now()
+                    });
+                }
+
                 state.gamePhase = 'computerTurn';
                 render();
                 currentDice = [...state.dice];
@@ -1087,17 +1174,30 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!move || !move.category || !move.column) { 
             move = determineOptimalStrike();
         }
-
         if (state.settings.sound) {
             computerChatterSeq.stop();
             Tone.Transport.stop();
             confirmBeep.triggerAttackRelease("A3", "16n");
         }
-        
         const score = move.type === 'STREICHEN' ? -1 : calculateScore(move.category, state.dice);
         state.scores.computer[move.column][move.category] = score;
         state.lastAiMove = { category: move.category, column: move.column };
-        
+
+        // --- LOGGING: KI-Eintrag/Streichen ---
+        if (state.settings.logGame) {
+            state.gameLog.push({
+                type: move.type === 'STREICHEN' ? 'strike' : 'entry',
+                player: 'computer',
+                category: move.category,
+                column: move.column,
+                score,
+                dice: state.dice.slice(),
+                turn: state.turn,
+                rollsLeft: state.rollsLeft,
+                timestamp: Date.now()
+            });
+        }
+
         const chosenCell = document.getElementById(`computer-${move.category}-${move.column}`);
         if(chosenCell) {
             chosenCell.style.transition = 'background-color 0.2s';
@@ -1105,7 +1205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await new Promise(res => setTimeout(res, 1000));
             chosenCell.style.backgroundColor = '';
         }
-        
         endTurn();
     }
 
