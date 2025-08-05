@@ -1285,6 +1285,13 @@ document.addEventListener('DOMContentLoaded', () => {
     undoNoButton.addEventListener('click', () => {
         undoModal.classList.add('hidden');
     });
+
+    function toggleKeep(index) {
+        // Nur im Spielerzug und während des Würfelns erlaubt
+        if (state.currentPlayer !== 'player' || state.rollsLeft === 0 || state.gamePhase === 'scoring') return;
+        state.kept[index] = !state.kept[index];
+        render();
+    }
 });
 </script>
 
