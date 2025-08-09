@@ -149,6 +149,27 @@
         .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--lcars-blue); }
         input:checked + .slider:before { transform: translateX(26px); }
+        /* Range Slider Styles */
+        .slider-range {
+            background: #333;
+            outline: none;
+        }
+        .slider-range::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--lcars-blue);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .slider-range::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--lcars-blue);
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8 relative">
@@ -291,6 +312,31 @@
                         <span class="slider"></span>
                     </div>
                 </label>
+                
+                <!-- AI Delay Settings -->
+                <div class="mt-6 pt-4 border-t border-gray-600">
+                    <h3 class="text-lg font-bold mb-4 text-lcars-blue">KI-GESCHWINDIGKEIT</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block mb-2 text-sm">Kurze Pausen: <span id="delay-short-value">1.0s</span></label>
+                            <input type="range" id="delay-short" min="300" max="3000" step="100" value="1000" 
+                                   class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-range">
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2 text-sm">Mittlere Pausen: <span id="delay-medium-value">1.5s</span></label>
+                            <input type="range" id="delay-medium" min="500" max="4000" step="100" value="1500" 
+                                   class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-range">
+                        </div>
+                        
+                        <div>
+                            <label class="block mb-2 text-sm">Lange Pausen: <span id="delay-long-value">2.0s</span></label>
+                            <input type="range" id="delay-long" min="1000" max="5000" step="100" value="2000" 
+                                   class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-range">
+                        </div>
+                    </div>
+                </div>
             </div>
             <button id="close-settings-button" class="w-1/2 mt-6 lcars-button justify-center">SCHLIESSEN</button>
         </div>
@@ -358,7 +404,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let globalSettings = {
         sound: true,
         screenshots: false,
-        logGame: false
+        logGame: false,
+        aiDelayShort: 1000,    // Kurze Delays (nach Würfen)
+        aiDelayMedium: 1500,   // Mittlere Delays (zwischen Würfen)
+        aiDelayLong: 2000      // Lange Delays (vor erstem Wurf)
     };
     let computerVoice, confirmBeep, warpSound, shaker, singleHit, shakeLoop, computerChatter, computerChatterSeq;
     const CATEGORIES = [
@@ -945,8 +994,49 @@ document.addEventListener('DOMContentLoaded', () => {
             return [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]].some(s => s.every(d => dice.includes(d)));
         }
 
+        _isFieldAvailable(category, column) {
+            // Prüfe ob das Feld bereits belegt ist
+            if (this.scorecard[column] && this.scorecard[column][category] !== undefined && this.scorecard[column][category] !== null) {
+                return false;
+            }
+
+            // Spalte 1 und 4: Alle Felder frei wählbar
+            if (column === 'col1' || column === 'col4') {
+                return true;
+            }
+
+            // Spalte 2: Strikt von oben nach unten
+            if (column === 'col2') {
+                const categoryIndex = this.SCORE_CATEGORIES.indexOf(category);
+                // Prüfe ob alle vorherigen Felder bereits ausgefüllt sind
+                for (let i = 0; i < categoryIndex; i++) {
+                    const prevCategory = this.SCORE_CATEGORIES[i];
+                    if (!this.scorecard[column] || this.scorecard[column][prevCategory] === null || this.scorecard[column][prevCategory] === undefined) {
+                        return false; // Vorheriges Feld ist noch nicht ausgefüllt
+                    }
+                }
+                return true;
+            }
+
+            // Spalte 3: Strikt von unten nach oben
+            if (column === 'col3') {
+                const categoryIndex = this.SCORE_CATEGORIES.indexOf(category);
+                // Prüfe ob alle nachfolgenden Felder bereits ausgefüllt sind
+                for (let i = categoryIndex + 1; i < this.SCORE_CATEGORIES.length; i++) {
+                    const nextCategory = this.SCORE_CATEGORIES[i];
+                    if (!this.scorecard[column] || this.scorecard[column][nextCategory] === null || this.scorecard[column][nextCategory] === undefined) {
+                        return false; // Nachfolgendes Feld ist noch nicht ausgefüllt
+                    }
+                }
+                return true;
+            }
+
+            return false;
+        }
+
         _calculateActionScore(dice, category, column, rollNumber) {
-            if (this.scorecard[column] && this.scorecard[column][category] !== undefined) {
+            // Prüfe sequentielle Verfügbarkeit
+            if (!this._isFieldAvailable(category, column)) {
                 return -Infinity;
             }
 
@@ -974,14 +1064,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Feld-Dringlichkeits-Faktor
-            if (['col2', 'col3'].includes(column)) {
-                const categoryIndex = this.SCORE_CATEGORIES.indexOf(category);
-                const nextFieldIndex = (column === 'col2')
-                    ? this.SCORE_CATEGORIES.findIndex(f => !(this.scorecard[column] || {}).hasOwnProperty(f))
-                    : this.SCORE_CATEGORIES.findLastIndex(f => !(this.scorecard[column] || {}).hasOwnProperty(f));
-                
-                if (categoryIndex === nextFieldIndex) {
+            // Feld-Dringlichkeits-Faktor für sequentielle Spalten
+            if (column === 'col2') {
+                // Nächstes zu füllendes Feld von oben
+                const nextFieldIndex = this.SCORE_CATEGORIES.findIndex(f => 
+                    !this.scorecard[column] || this.scorecard[column][f] === null || this.scorecard[column][f] === undefined
+                );
+                if (this.SCORE_CATEGORIES.indexOf(category) === nextFieldIndex) {
+                    urgencyFactor = 1.5;
+                }
+            } else if (column === 'col3') {
+                // Nächstes zu füllendes Feld von unten
+                const reversedCategories = [...this.SCORE_CATEGORIES].reverse();
+                const nextFieldIndex = reversedCategories.findIndex(f => 
+                    !this.scorecard[column] || this.scorecard[column][f] === null || this.scorecard[column][f] === undefined
+                );
+                if (reversedCategories.indexOf(category) === nextFieldIndex) {
                     urgencyFactor = 1.5;
                 }
             }
@@ -1023,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Step 3: Evaluate the option to scratch
-            if (rollNumber === 3 && bestAction.action === 'Keine Aktion möglich') {
+            if (rollNumber === 3 && (bestAction.action === 'Keine Aktion möglich' || bestAction.score === -Infinity)) {
                 const scratchDetails = this._determineFieldToScratch();
                 if (scratchDetails) {
                     bestAction.score = 1;
@@ -1063,15 +1161,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         _determineFieldToScratch() {
+            // Prioritätsliste für das Streichen - bevorzuge verfügbare Felder
             const priorities = [
                 { category: 'ones', column: 'col1' },
                 { category: 'twos', column: 'col1' },
-                { category: 'kniffel', column: 'col1' }
+                { category: 'kniffel', column: 'col1' },
+                { category: 'chance', column: 'col1' }
             ];
             
             for (const field of priorities) {
-                if (!(this.scorecard[field.column] && this.scorecard[field.column][field.category] !== undefined)) {
+                if (this._isFieldAvailable(field.category, field.column)) {
                     return field;
+                }
+            }
+            
+            // Falls alle Prioritätsfelder nicht verfügbar sind, finde das erste verfügbare Feld
+            for (const column of Object.keys(this.MULTIPLIERS)) {
+                for (const category of this.SCORE_CATEGORIES) {
+                    if (this._isFieldAvailable(category, column)) {
+                        return { category, column };
+                    }
                 }
             }
             
@@ -1079,148 +1188,175 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- REPLACE EXISTING COMPUTER TURN WITH NEW AI ---
-
-    async function computerTurn() {
-        // Initialisiere KI mit aktuellem Scorecard
-        const kiPlayer = new KniffelAI(state.scores.computer);
+    async function executeComputerMoveNew(move, turnId = null) {
+        // Überprüfe ob dieser Zug noch aktuell ist
+        if (turnId !== null && turnId !== state.turnId - 1) return;
         
-        let rollsRemaining = 3;
-        let currentDice;
-        let firstRollDice = [];
-
-        state.rollsLeft = rollsRemaining;
-        state.dice = [0,0,0,0,0];
-        state.kept = [false,false,false,false,false];
-        state.hasRolledMoreThanOnce = false;
-        render();
+        if (state.settings.sound) {
+            computerChatterSeq.stop();
+            Tone.Transport.stop();
+            confirmBeep.triggerAttackRelease("A3", "16n");
+        }
         
-        // Warte bevor erster Wurf
-        await new Promise(res => setTimeout(res, 1500));
-        
-        // ERSTER WURF
-        await animateAndRollDice(5);
+        const score = move.type === 'STREICHEN' ? -1 : calculateScore(move.category, state.dice);
+        state.scores.computer[move.column][move.category] = score;
+        state.lastAiMove = { category: move.category, column: move.column };
 
-        // --- LOGGING: KI-Wurf (erster Wurf) ---
+        // --- LOGGING: KI-Eintrag/Streichen ---
         if (state.settings.logGame) {
             state.gameLog.push({
-                type: 'roll',
+                type: move.type === 'STREICHEN' ? 'strike' : 'entry',
                 player: 'computer',
+                category: move.category,
+                column: move.column,
+                score,
                 dice: state.dice.slice(),
-                kept: state.kept.slice(),
                 turn: state.turn,
                 rollsLeft: state.rollsLeft,
                 timestamp: Date.now()
             });
         }
 
+        const chosenCell = document.getElementById(`computer-${move.category}-${move.column}`);
+        if(chosenCell) {
+            chosenCell.style.transition = 'background-color 0.2s';
+            chosenCell.style.backgroundColor = 'var(--lcars-orange)';
+            await new Promise(res => setTimeout(res, 1200));
+            chosenCell.style.backgroundColor = '';
+        }
+        endTurn();
+    }
+
+    // --- UTILITY FUNCTIONS ---
+    async function takeScreenshot(filename) {
+        try {
+            const canvas = await html2canvas(document.body, {
+                backgroundColor: '#000000',
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (error) {
+            console.error('Screenshot failed:', error);
+        }
+    }
+
+    // Add slider event listeners
+    const delayShortSlider = document.getElementById('delay-short');
+    const delayMediumSlider = document.getElementById('delay-medium');
+    const delayLongSlider = document.getElementById('delay-long');
+    const delayShortValue = document.getElementById('delay-short-value');
+    const delayMediumValue = document.getElementById('delay-medium-value');
+    const delayLongValue = document.getElementById('delay-long-value');
+
+    // Initialize slider values
+    delayShortSlider.value = globalSettings.aiDelayShort;
+    delayMediumSlider.value = globalSettings.aiDelayMedium;
+    delayLongSlider.value = globalSettings.aiDelayLong;
+    delayShortValue.textContent = (globalSettings.aiDelayShort / 1000).toFixed(1) + 's';
+    delayMediumValue.textContent = (globalSettings.aiDelayMedium / 1000).toFixed(1) + 's';
+    delayLongValue.textContent = (globalSettings.aiDelayLong / 1000).toFixed(1) + 's';
+
+    delayShortSlider.addEventListener('input', (e) => {
+        globalSettings.aiDelayShort = parseInt(e.target.value);
+        if(state && state.settings) state.settings.aiDelayShort = globalSettings.aiDelayShort;
+        delayShortValue.textContent = (globalSettings.aiDelayShort / 1000).toFixed(1) + 's';
+    });
+
+    delayMediumSlider.addEventListener('input', (e) => {
+        globalSettings.aiDelayMedium = parseInt(e.target.value);
+        if(state && state.settings) state.settings.aiDelayMedium = globalSettings.aiDelayMedium;
+        delayMediumValue.textContent = (globalSettings.aiDelayMedium / 1000).toFixed(1) + 's';
+    });
+
+    delayLongSlider.addEventListener('input', (e) => {
+        globalSettings.aiDelayLong = parseInt(e.target.value);
+        if(state && state.settings) state.settings.aiDelayLong = globalSettings.aiDelayLong;
+        delayLongValue.textContent = (globalSettings.aiDelayLong / 1000).toFixed(1) + 's';
+    });
+
+    // --- EVENT LISTENERS ---
+    startGameButton.addEventListener('click', () => {
+        console.log('Start game button clicked'); // Debug
+        state.playerName = playerNameInput.value || 'Spieler 1';
+        Tone.start().then(setupAudio).then(playBoardingSequence);
+    });
+    rollButton.addEventListener('click', rollDice);
+    helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
+    showScoreButton.addEventListener('click', () => {
+        updateScoreModal();
+        scoreModal.classList.remove('hidden');
+    });
+    closeScoreButton.addEventListener('click', () => scoreModal.classList.add('hidden'));
+    settingsButton.addEventListener('click', () => {
+        console.log('Settings button clicked'); // Debug
+        settingsModal.classList.remove('hidden');
+    });
+    settingsButtonSetup.addEventListener('click', () => {
+        console.log('Settings button setup clicked'); // Debug
+        settingsModal.classList.remove('hidden');
+    });
+    closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
+    soundToggle.addEventListener('change', (e) => {
+        globalSettings.sound = e.target.checked;
+        if(state && state.settings) state.settings.sound = globalSettings.sound;
+        Tone.Master.mute = !globalSettings.sound;
+    });
+    screenshotToggle.addEventListener('change', (e) => {
+        globalSettings.screenshots = e.target.checked;
+        if(state && state.settings) state.settings.screenshots = globalSettings.screenshots;
+    });
+    logToggle.addEventListener('change', (e) => {
+        globalSettings.logGame = e.target.checked;
+        if(state && state.settings) state.settings.logGame = globalSettings.logGame;
+    });
+    diceElements.forEach(die => { die.addEventListener('click', () => toggleKeep(parseInt(die.dataset.index))); });
+    scoreboardBody.addEventListener('click', (e) => {
+        const cell = e.target.closest('.score-cell');
+        if (!cell || !cell.classList.contains('available')) return;
+        const { player, category, column } = cell.dataset;
+        if (player !== 'player') return;
+        selectScore(category, column);
+    });
+    newGameButton.addEventListener('click', () => {
+        gameOverModal.classList.add('hidden');
+        boardingTextContainer.innerHTML = '';
+        setupScreen.style.opacity = 1;
+        setupScreen.classList.remove('hidden');
+        gameContainer.classList.add('hidden'); // Spiel-Container verstecken
+    });
+    undoButton.addEventListener('click', () => {
+        undoModal.classList.remove('hidden');
+    });
+
+    undoYesButton.addEventListener('click', () => {
+        if (state.lastPlayerState && !state.undoUsedThisTurn) {
+            state = JSON.parse(JSON.stringify(state.lastPlayerState));
+            state.undoUsedThisTurn = true;
+            render();
+        }
+        undoModal.classList.add('hidden');
+    });
+
+    undoNoButton.addEventListener('click', () => {
+        undoModal.classList.add('hidden');
+    });
+
+    function toggleKeep(index) {
+        if (state.currentPlayer !== 'player' || state.rollsLeft === 0 || state.gamePhase === 'scoring') return;
+        
+        // Verhindere Selektion von ungewürfelten Würfeln
+        if (state.dice[index] === 0) return;
+        
+        // Verhindere Selektion während des Rollens
+        if (state.gamePhase === 'rolling') return;
+        
+        state.kept[index] = !state.kept[index];
         render();
-        currentDice = [...state.dice];
-        firstRollDice = [...state.dice];
-        rollsRemaining--;
-        state.rollsLeft = rollsRemaining;
-
-        // Warte nach erstem Wurf für Sichtbarkeit
-        await new Promise(r => setTimeout(r, 1500));
-
-        // Schleife für weitere Würfe oder Entscheidungen
-        while (rollsRemaining > 0) {
-            // Aktualisiere KI-Scorecard
-            kiPlayer.scorecard = state.scores.computer;
-            
-            // Bestimme aktuelle Würfel für Spalte 4 (nur Erstwurf)
-            const diceForDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
-            const rollNumber = 4 - rollsRemaining; // 1, 2, oder 3
-            
-            const decision = kiPlayer.getBestAction(diceForDecision, rollNumber);
-
-            if (decision.action === 'Eintragen') {
-                await executeComputerMoveNew({
-                    type: 'EINTRAGEN',
-                    category: decision.details.category,
-                    column: decision.details.column
-                });
-                return;
-            } else if (decision.action === 'Streichen') {
-                await executeComputerMoveNew({
-                    type: 'STREICHEN',
-                    category: decision.details.category,
-                    column: decision.details.column
-                });
-                return;
-            } else if (decision.action === 'Weiterwürfeln') {
-                state.kept = decision.details;
-                render();
-                
-                // Zeige gehaltene Würfel für 1 Sekunde
-                await new Promise(r => setTimeout(r, 1000));
-                
-                const diceToRollCount = state.kept.filter(k => !k).length;
-                if (diceToRollCount === 0) {
-                    // Alle Würfel behalten, beende den Zug sofort
-                    rollsRemaining = 0;
-                    state.rollsLeft = 0;
-                    break;
-                }
-                
-                rollsRemaining--;
-                state.rollsLeft = rollsRemaining;
-                state.hasRolledMoreThanOnce = true;
-                
-                await animateAndRollDice(diceToRollCount);
-
-                // --- LOGGING: KI-Wurf (weitere Würfe) ---
-                if (state.settings.logGame) {
-                    state.gameLog.push({
-                        type: 'roll',
-                        player: 'computer',
-                        dice: state.dice.slice(),
-                        kept: state.kept.slice(),
-                        turn: state.turn,
-                        rollsLeft: state.rollsLeft,
-                        timestamp: Date.now()
-                    });
-                }
-
-                render();
-                currentDice = [...state.dice];
-                
-                // Warte nach jedem Wurf für Sichtbarkeit
-                await new Promise(r => setTimeout(r, 1500));
-            } else {
-                // Keine gültige Aktion, beende die Schleife
-                break;
-            }
-        }
-
-        // Nach allen Würfen: Finale Entscheidung treffen
-        kiPlayer.scorecard = state.scores.computer;
-        const diceForFinalDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
-        const finalDecision = kiPlayer.getBestAction(diceForFinalDecision, 3);
-
-        if (finalDecision.action === 'Eintragen') {
-            await executeComputerMoveNew({
-                type: 'EINTRAGEN',
-                category: finalDecision.details.category,
-                column: finalDecision.details.column
-            });
-        } else if (finalDecision.action === 'Streichen') {
-            await executeComputerMoveNew({
-                type: 'STREICHEN',
-                category: finalDecision.details.category,
-                column: finalDecision.details.column
-            });
-        } else {
-            // Fallback: Finde ein Feld zum Streichen
-            const fallbackField = findAvailableFieldToStrike();
-            if (fallbackField) {
-                await executeComputerMoveNew({
-                    type: 'STREICHEN',
-                    category: fallbackField.category,
-                    column: fallbackField.column
-                });
-            }
-        }
     }
 
     // Hilfsfunktion für Fallback-Streichen
@@ -1251,90 +1387,185 @@ document.addEventListener('DOMContentLoaded', () => {
         return null;
     }
 
-    // --- SCREENSHOT FUNCTIONALITY ---
-    async function takeScreenshot(filename) {
-        if (!state.settings.screenshots) return;
-        try {
-            const canvas = await html2canvas(document.body);
-            const link = document.createElement('a');
-            const prefix = String(state.screenshotCounter).padStart(3, '0');
-            link.download = `${prefix}_${filename}`;
-            link.href = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-            link.click();
-            state.screenshotCounter++;
-        } catch (error) {
-            console.error("Screenshot-Fehler:", error);
-        }
-    }
+    // --- REPLACE EXISTING COMPUTER TURN WITH NEW AI ---
+    async function computerTurn() {
+        const turnId = state.turnId++; // Eindeutige ID für diesen Zug
+        
+        // Initialisiere KI mit aktuellem Scorecard
+        const kiPlayer = new KniffelAI(state.scores.computer);
+        
+        let rollsRemaining = 3;
+        let currentDice = [];
+        let firstRollDice = [];
 
-    // --- EVENT LISTENERS ---
-    startGameButton.addEventListener('click', () => {
-        state.playerName = playerNameInput.value || 'Spieler 1';
-        Tone.start().then(setupAudio).then(playBoardingSequence);
-    });
-    rollButton.addEventListener('click', rollDice);
-    helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
-    closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
-    showScoreButton.addEventListener('click', () => {
-        updateScoreModal();
-        scoreModal.classList.remove('hidden');
-    });
-    closeScoreButton.addEventListener('click', () => scoreModal.classList.add('hidden'));
-    settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-    settingsButtonSetup.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-    closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
-    soundToggle.addEventListener('change', (e) => {
-        globalSettings.sound = e.target.checked;
-        if(state && state.settings) state.settings.sound = globalSettings.sound;
-        Tone.Master.mute = !globalSettings.sound;
-    });
-    screenshotToggle.addEventListener('change', (e) => {
-        globalSettings.screenshots = e.target.checked;
-        if(state && state.settings) state.settings.screenshots = globalSettings.screenshots;
-    });
-    logToggle.addEventListener('change', (e) => {
-        globalSettings.logGame = e.target.checked;
-        if(state && state.settings) state.settings.logGame = globalSettings.logGame;
-    });
-    diceElements.forEach(die => { die.addEventListener('click', () => toggleKeep(parseInt(die.dataset.index))); });
-    scoreboardBody.addEventListener('click', (e) => {
-        const cell = e.target.closest('.score-cell');
-        if (!cell || !cell.classList.contains('available')) return;
-        const { player, category, column } = cell.dataset;
-        if (player !== 'player') return;
-        selectScore(category, column);
-    });
-    newGameButton.addEventListener('click', () => {
-        gameOverModal.classList.add('hidden');
-        boardingTextContainer.innerHTML = '';
-        setupScreen.style.opacity = 1;
-        setupScreen.classList.remove('hidden');
-    });
-    undoButton.addEventListener('click', () => {
-        // Optional: Zeige ein Bestätigungs-Modal
-        undoModal.classList.remove('hidden');
-    });
-
-    undoYesButton.addEventListener('click', () => {
-        if (state.lastPlayerState && !state.undoUsedThisTurn) {
-            // Zustand zurücksetzen
-            state = JSON.parse(JSON.stringify(state.lastPlayerState));
-            state.undoUsedThisTurn = true;
-            render();
-        }
-        undoModal.classList.add('hidden');
-    });
-
-    undoNoButton.addEventListener('click', () => {
-        undoModal.classList.add('hidden');
-    });
-
-    function toggleKeep(index) {
-        // Nur im Spielerzug und während des Würfelns erlaubt
-        if (state.currentPlayer !== 'player' || state.rollsLeft === 0 || state.gamePhase === 'scoring') return;
-        state.kept[index] = !state.kept[index];
+        state.rollsLeft = rollsRemaining;
+        state.dice = [0,0,0,0,0];
+        state.kept = [false,false,false,false,false];
+        state.hasRolledMoreThanOnce = false;
         render();
+        
+        // Überprüfe ob dieser Zug noch aktuell ist
+        if (turnId !== state.turnId - 1) return;
+        
+        // Warte bevor erster Wurf
+        await new Promise(res => setTimeout(res, state.settings.aiDelayLong));
+        
+        // Überprüfe nochmal ob dieser Zug noch aktuell ist
+        if (turnId !== state.turnId - 1) return;
+        
+        // ERSTER WURF - animiere und setze dann die Werte
+        await animateAndRollDice(5);
+        
+        // WICHTIG: Würfel sind jetzt aufgedeckt, gamePhase auf 'afterRoll' setzen
+        state.gamePhase = 'afterRoll';
+        render();
+        
+        // Speichere die Würfelwerte NACH dem Aufdecken
+        currentDice = [...state.dice];
+        firstRollDice = [...state.dice];
+        rollsRemaining--;
+        state.rollsLeft = rollsRemaining;
+
+        // --- LOGGING: KI-Wurf (erster Wurf) ---
+        if (state.settings.logGame) {
+            state.gameLog.push({
+                type: 'roll',
+                player: 'computer',
+                dice: state.dice.slice(),
+                kept: state.kept.slice(),
+                turn: state.turn,
+                rollsLeft: state.rollsLeft,
+                timestamp: Date.now()
+            });
+        }
+
+        // WICHTIG: Zeige Würfelwerte für längere Zeit, bevor KI entscheidet
+        await new Promise(r => setTimeout(r, state.settings.aiDelayLong));
+
+        // Schleife für weitere Würfe oder Entscheidungen
+        while (rollsRemaining > 0) {
+            // Überprüfe ob dieser Zug noch aktuell ist
+            if (turnId !== state.turnId - 1) return;
+            
+            // Aktualisiere KI-Scorecard
+            kiPlayer.scorecard = state.scores.computer;
+            
+            // Bestimme aktuelle Würfel für Spalte 4 (nur Erstwurf)
+            const diceForDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
+            const rollNumber = 4 - rollsRemaining; // 1, 2, oder 3
+            
+            const decision = kiPlayer.getBestAction(diceForDecision, rollNumber);
+
+            if (decision.action === 'Eintragen') {
+                await executeComputerMoveNew({
+                    type: 'EINTRAGEN',
+                    category: decision.details.category,
+                    column: decision.details.column
+                }, turnId);
+                return;
+            } else if (decision.action === 'Streichen') {
+                await executeComputerMoveNew({
+                    type: 'STREICHEN',
+                    category: decision.details.category,
+                    column: decision.details.column
+                }, turnId);
+                return;
+            } else if (decision.action === 'Weiterwürfeln') {
+                state.kept = decision.details;
+                render();
+                
+                // WICHTIG: Zeige gehaltene/nicht gehaltene Würfel für längere Zeit
+                await new Promise(r => setTimeout(r, state.settings.aiDelayLong));
+                
+                // Überprüfe ob dieser Zug noch aktuell ist
+                if (turnId !== state.turnId - 1) return;
+                
+                const diceToRollCount = state.kept.filter(k => !k).length;
+                if (diceToRollCount === 0) {
+                    // Alle Würfel behalten, beende den Zug sofort
+                    rollsRemaining = 0;
+                    state.rollsLeft = 0;
+                    break;
+                }
+                
+                rollsRemaining--;
+                state.rollsLeft = rollsRemaining;
+                state.hasRolledMoreThanOnce = true;
+                
+                // NÄCHSTER WURF - animiere und setze dann die Werte
+                await animateAndRollDice(diceToRollCount);
+                
+                // WICHTIG: Würfel sind jetzt aufgedeckt
+                state.gamePhase = 'afterRoll';
+                render();
+                
+                // Speichere die neuen Würfelwerte NACH dem Aufdecken
+                currentDice = [...state.dice];
+
+                // --- LOGGING: KI-Wurf (weitere Würfe) ---
+                if (state.settings.logGame) {
+                    state.gameLog.push({
+                        type: 'roll',
+                        player: 'computer',
+                        dice: state.dice.slice(),
+                        kept: state.kept.slice(),
+                        turn: state.turn,
+                        rollsLeft: state.rollsLeft,
+                        timestamp: Date.now()
+                    });
+                }
+
+                // WICHTIG: Zeige neue Würfelwerte für längere Zeit
+                await new Promise(r => setTimeout(r, state.settings.aiDelayLong));
+            } else {
+                // Keine gültige Aktion gefunden, zwinge Schleifenende
+                console.log('KI: Keine gültige Aktion, beende Würfe');
+                rollsRemaining = 0;
+                break;
+            }
+        }
+
+        // Überprüfe ein letztes Mal ob dieser Zug noch aktuell ist
+        if (turnId !== state.turnId - 1) return;
+
+        // Nach allen Würfen: Finale Entscheidung treffen
+        kiPlayer.scorecard = state.scores.computer;
+        const diceForFinalDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
+        const finalDecision = kiPlayer.getBestAction(diceForFinalDecision, 3);
+
+        console.log('KI finale Entscheidung:', finalDecision);
+
+        if (finalDecision.action === 'Eintragen' && finalDecision.details) {
+            await executeComputerMoveNew({
+                type: 'EINTRAGEN',
+                category: finalDecision.details.category,
+                column: finalDecision.details.column
+            }, turnId);
+        } else if (finalDecision.action === 'Streichen' && finalDecision.details) {
+            await executeComputerMoveNew({
+                type: 'STREICHEN',
+                category: finalDecision.details.category,
+                column: finalDecision.details.column
+            }, turnId);
+        } else {
+            // Fallback: Finde ein Feld zum Streichen
+            console.log('KI: Fallback - suche Feld zum Streichen');
+            const fallbackField = findAvailableFieldToStrike();
+            if (fallbackField) {
+                console.log('KI: Fallback-Feld gefunden:', fallbackField);
+                await executeComputerMoveNew({
+                    type: 'STREICHEN',
+                    category: fallbackField.category,
+                    column: fallbackField.column
+                }, turnId);
+            } else {
+                console.error('KI: Kein Fallback-Feld verfügbar! Spiel möglicherweise zu Ende.');
+                // Notfall: Beende den Zug trotzdem
+                endTurn();
+            }
+        }
     }
+
 });
 </script>
 
