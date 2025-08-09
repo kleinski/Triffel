@@ -899,7 +899,192 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- NEW AI LOGIC BASED ON PSEUDOCODE ---
 
+    class KniffelAI {
+        constructor(scorecard = {}) {
+            this.scorecard = scorecard;
+            this.SCORE_CATEGORIES = [
+                'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
+                'threeOfAKind', 'fourOfAKind', 'Full House', 'smallStraight',
+                'largeStraight', 'kniffel', 'chance'
+            ];
+            this.MULTIPLIERS = { 'col1': 1, 'col2': 2, 'col3': 2, 'col4': 3 };
+            this.BONUS_THRESHOLD = 63;
+        }
+
+        _calculateBasePoints(dice, category) {
+            const counts = dice.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
+            const diceSum = dice.reduce((sum, d) => sum + d, 0);
+
+            const upperCategories = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+            const upperIndex = upperCategories.indexOf(category);
+            
+            if (upperIndex !== -1) {
+                const value = upperIndex + 1;
+                return (counts[value] || 0) * value;
+            } else if (['threeOfAKind', 'fourOfAKind', 'chance'].includes(category)) {
+                return diceSum;
+            } else if (category === 'Full House' && Object.values(counts).includes(3) && Object.values(counts).includes(2)) {
+                return 25;
+            } else if (category === 'smallStraight' && this._isSmallStraight(dice)) {
+                return 30;
+            } else if (category === 'largeStraight' && this._isLargeStraight(dice)) {
+                return 40;
+            } else if (category === 'kniffel' && Object.values(counts).includes(5)) {
+                return 50;
+            }
+            
+            return 0;
+        }
+
+        _isSmallStraight(dice) {
+            const uniqueDice = [...new Set(dice)];
+            return [[1, 2, 3, 4], [2, 3, 4, 5], [3, 4, 5, 6]].some(s => s.every(d => uniqueDice.includes(d)));
+        }
+
+        _isLargeStraight(dice) {
+            return [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]].some(s => s.every(d => dice.includes(d)));
+        }
+
+        _calculateActionScore(dice, category, column, rollNumber) {
+            if (this.scorecard[column] && this.scorecard[column][category] !== undefined) {
+                return -Infinity;
+            }
+
+            const basePoints = this._calculateBasePoints(dice, category);
+            if (basePoints === 0) return -Infinity;
+            
+            const columnMultiplier = this.MULTIPLIERS[column];
+            let bonusSecurityFactor = 1.0;
+            let urgencyFactor = 1.0;
+
+            // Bonus-Sicherheits-Faktor
+            const upperCategories = ['ones', 'twos', 'threes', 'fours', 'fives', 'sixes'];
+            if (['col2', 'col3', 'col4'].includes(column) && upperCategories.includes(category)) {
+                const upperScore = Object.entries(this.scorecard[column] || {})
+                                        .filter(([c, _]) => upperCategories.includes(c))
+                                        .reduce((sum, [_, points]) => sum + (points > 0 ? points : 0), 0);
+                const potentialScore = upperScore + basePoints;
+                
+                if (potentialScore >= this.BONUS_THRESHOLD) {
+                    bonusSecurityFactor = 1.8;
+                } else if (basePoints < 12) {
+                    bonusSecurityFactor = 0.7;
+                } else {
+                    bonusSecurityFactor = 1.0 + (potentialScore / this.BONUS_THRESHOLD) * 0.5;
+                }
+            }
+
+            // Feld-Dringlichkeits-Faktor
+            if (['col2', 'col3'].includes(column)) {
+                const categoryIndex = this.SCORE_CATEGORIES.indexOf(category);
+                const nextFieldIndex = (column === 'col2')
+                    ? this.SCORE_CATEGORIES.findIndex(f => !(this.scorecard[column] || {}).hasOwnProperty(f))
+                    : this.SCORE_CATEGORIES.findLastIndex(f => !(this.scorecard[column] || {}).hasOwnProperty(f));
+                
+                if (categoryIndex === nextFieldIndex) {
+                    urgencyFactor = 1.5;
+                }
+            }
+            
+            let actionScore = (basePoints * columnMultiplier) * bonusSecurityFactor * urgencyFactor;
+
+            // Hierarchical boosts
+            if (column === 'col4' && rollNumber === 1 && ['kniffel', 'largeStraight', 'Full House'].includes(category)) {
+                actionScore *= 2.0;
+            }
+            if (['col2', 'col3'].includes(column) && ['kniffel', 'largeStraight', 'Full House', 'fourOfAKind'].includes(category)) {
+                actionScore *= 1.5;
+            }
+
+            return actionScore;
+        }
+
+        getBestAction(dice, rollNumber) {
+            let bestAction = { score: -Infinity, action: 'Keine Aktion möglich', details: null };
+
+            // Step 1: Evaluate all entry options
+            for (const column of Object.keys(this.MULTIPLIERS)) {
+                for (const category of this.SCORE_CATEGORIES) {
+                    const score = this._calculateActionScore(dice, category, column, rollNumber);
+                    if (score > bestAction.score) {
+                        bestAction.score = score;
+                        bestAction.action = 'Eintragen';
+                        bestAction.details = { category, column };
+                    }
+                }
+            }
+
+            // Step 2: Evaluate the option to re-roll
+            const rerollScore = 150;
+            if (rollNumber < 3 && bestAction.score < rerollScore) {
+                bestAction.score = rerollScore;
+                bestAction.action = 'Weiterwürfeln';
+                bestAction.details = this._determineDiceToKeep(dice);
+            }
+
+            // Step 3: Evaluate the option to scratch
+            if (rollNumber === 3 && bestAction.action === 'Keine Aktion möglich') {
+                const scratchDetails = this._determineFieldToScratch();
+                if (scratchDetails) {
+                    bestAction.score = 1;
+                    bestAction.action = 'Streichen';
+                    bestAction.details = scratchDetails;
+                }
+            }
+            
+            return bestAction;
+        }
+
+        _determineDiceToKeep(dice) {
+            const counts = dice.reduce((acc, val) => { acc[val] = (acc[val] || 0) + 1; return acc; }, {});
+            
+            // Bestimme welche Würfel behalten werden sollen
+            let keptIndices = [];
+            
+            if (Object.values(counts).includes(5)) {
+                keptIndices = [true, true, true, true, true]; // alle Würfel
+            } else if (Object.values(counts).includes(4)) {
+                const targetValue = Object.keys(counts).find(key => counts[key] === 4);
+                keptIndices = dice.map(d => d == targetValue);
+            } else if (this._isLargeStraight(dice)) {
+                const straight = [1,2,3,4,5].every(d => dice.includes(d)) ? [1,2,3,4,5] : [2,3,4,5,6];
+                keptIndices = dice.map(d => straight.includes(d));
+            } else if (Object.values(counts).includes(3) && Object.values(counts).includes(2)) {
+                keptIndices = [true, true, true, true, true]; // Full House
+            } else if (Object.values(counts).includes(3)) {
+                const targetValue = Object.keys(counts).find(key => counts[key] === 3);
+                keptIndices = dice.map(d => d == targetValue);
+            } else {
+                // Behalte die höchsten Würfel
+                keptIndices = dice.map(d => d >= 5);
+            }
+            
+            return keptIndices;
+        }
+
+        _determineFieldToScratch() {
+            const priorities = [
+                { category: 'ones', column: 'col1' },
+                { category: 'twos', column: 'col1' },
+                { category: 'kniffel', column: 'col1' }
+            ];
+            
+            for (const field of priorities) {
+                if (!(this.scorecard[field.column] && this.scorecard[field.column][field.category] !== undefined)) {
+                    return field;
+                }
+            }
+            
+            return null;
+        }
+    }
+
+    // --- REPLACE EXISTING COMPUTER TURN WITH NEW AI ---
+
     async function computerTurn() {
+        // Initialisiere KI mit aktuellem Scorecard
+        const kiPlayer = new KniffelAI(state.scores.computer);
+        
         let rollsRemaining = 3;
         let currentDice;
         let firstRollDice = [];
@@ -907,8 +1092,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.rollsLeft = rollsRemaining;
         state.dice = [0,0,0,0,0];
         state.kept = [false,false,false,false,false];
+        state.hasRolledMoreThanOnce = false;
         render();
+        
+        // Warte bevor erster Wurf
         await new Promise(res => setTimeout(res, 1500));
+        
+        // ERSTER WURF
         await animateAndRollDice(5);
 
         // --- LOGGING: KI-Wurf (erster Wurf) ---
@@ -924,30 +1114,59 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        state.gamePhase = 'computerTurn';
         render();
         currentDice = [...state.dice];
         firstRollDice = [...state.dice];
         rollsRemaining--;
+        state.rollsLeft = rollsRemaining;
 
-        while (rollsRemaining >= 0) {
-            const decision = aiDecision(currentDice, rollsRemaining, firstRollDice);
+        // Warte nach erstem Wurf für Sichtbarkeit
+        await new Promise(r => setTimeout(r, 1500));
 
-            if (decision.type === 'EINTRAGEN' || decision.type === 'STREICHEN') {
-                await executeComputerMove(decision);
+        // Schleife für weitere Würfe oder Entscheidungen
+        while (rollsRemaining > 0) {
+            // Aktualisiere KI-Scorecard
+            kiPlayer.scorecard = state.scores.computer;
+            
+            // Bestimme aktuelle Würfel für Spalte 4 (nur Erstwurf)
+            const diceForDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
+            const rollNumber = 4 - rollsRemaining; // 1, 2, oder 3
+            
+            const decision = kiPlayer.getBestAction(diceForDecision, rollNumber);
+
+            if (decision.action === 'Eintragen') {
+                await executeComputerMoveNew({
+                    type: 'EINTRAGEN',
+                    category: decision.details.category,
+                    column: decision.details.column
+                });
                 return;
-            } else if (decision.type === 'NEUWERFEN') {
-                state.kept = decision.wuerfelBehalten;
+            } else if (decision.action === 'Streichen') {
+                await executeComputerMoveNew({
+                    type: 'STREICHEN',
+                    category: decision.details.category,
+                    column: decision.details.column
+                });
+                return;
+            } else if (decision.action === 'Weiterwürfeln') {
+                state.kept = decision.details;
                 render();
-                await new Promise(res => setTimeout(res, 2000));
+                
+                // Zeige gehaltene Würfel für 1 Sekunde
+                await new Promise(r => setTimeout(r, 1000));
+                
                 const diceToRollCount = state.kept.filter(k => !k).length;
-                if (diceToRollCount === 0 || rollsRemaining === 0) {
-                    const finalDecision = aiDecision(currentDice, 0, firstRollDice);
-                    await executeComputerMove(finalDecision);
-                    return;
+                if (diceToRollCount === 0) {
+                    // Alle Würfel behalten, beende den Zug sofort
+                    rollsRemaining = 0;
+                    state.rollsLeft = 0;
+                    break;
                 }
+                
                 rollsRemaining--;
                 state.rollsLeft = rollsRemaining;
+                state.hasRolledMoreThanOnce = true;
+                
                 await animateAndRollDice(diceToRollCount);
 
                 // --- LOGGING: KI-Wurf (weitere Würfe) ---
@@ -963,249 +1182,73 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                state.gamePhase = 'computerTurn';
                 render();
                 currentDice = [...state.dice];
-            }
-        }
-    }
-
-    function aiDecision(currentDice, rollsRemaining, firstRollDice) {
-        let possibleActions = [];
-
-        // 1. Evaluate all possible placements
-        const diceForCol4 = state.hasRolledMoreThanOnce ? [] : firstRollDice;
-
-        for (const col of ['col1', 'col2', 'col3', 'col4']) {
-            const diceToUse = col === 'col4' ? diceForCol4 : currentDice;
-            if (diceToUse.length === 0) continue;
-
-            for (const cat of CATEGORIES) {
-                if(cat.isTotal) continue;
-                if (isCellAvailableForComputer(cat.id, col) && canScore(diceToUse, col, cat.id, 3 - rollsRemaining)) {
-                    const evaluation = evaluateEntry(diceToUse, col, cat.id);
-                    if (evaluation.value > -Infinity) {
-                        possibleActions.push({ type: 'EINTRAGEN', category: cat.id, column: col, priority: evaluation.priority, value: evaluation.value, dice: diceToUse });
-                    }
-                }
+                
+                // Warte nach jedem Wurf für Sichtbarkeit
+                await new Promise(r => setTimeout(r, 1500));
+            } else {
+                // Keine gültige Aktion, beende die Schleife
+                break;
             }
         }
 
-        // 2. Evaluate rerolling if rolls are left
-        if (rollsRemaining > 0) {
-            const { bestKeep, expectedValue } = chooseDiceToKeep(currentDice);
-            possibleActions.push({ type: 'NEUWERFEN', wuerfelBehalten: bestKeep, priority: AI_PRIORITY.G_REREROLL, value: expectedValue });
-        }
-        
-        // 3. If it's the last roll and no good entry is found, generate strike options
-        const bestEntry = possibleActions.filter(a => a.type === 'EINTRAGEN').sort((a,b) => b.value - a.value)[0];
-        if (rollsRemaining === 0 && (!bestEntry || bestEntry.value < 5)) {
-             for (const col of ['col1', 'col2', 'col3', 'col4']) {
-                for (const cat of CATEGORIES) {
-                    if(cat.isTotal) continue;
-                    if (isCellAvailableForComputer(cat.id, col)) {
-                        const evaluation = evaluateStrike(col, cat.id);
-                        possibleActions.push({ type: 'STREICHEN', category: cat.id, column: col, priority: evaluation.priority, value: evaluation.value});
-                    }
-                }
-            }
-        }
-        
-        // Final Decision: Sort by priority, then by value
-        possibleActions.sort((a, b) => (a.priority - b.priority) || (b.value - a.value));
+        // Nach allen Würfen: Finale Entscheidung treffen
+        kiPlayer.scorecard = state.scores.computer;
+        const diceForFinalDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
+        const finalDecision = kiPlayer.getBestAction(diceForFinalDecision, 3);
 
-        // If no action is found (edge case), create a fallback strike action
-        if (possibleActions.length === 0) {
-            return determineOptimalStrike();
-        }
-
-        return possibleActions[0];
-    }
-
-    function determineOptimalStrike() {
-        let bestStrike = { value: Infinity };
-        for (const col of ['col1', 'col2', 'col3', 'col4']) {
-            for (const cat of CATEGORIES) {
-                if(cat.isTotal) continue;
-                if (isCellAvailableForComputer(cat.id, col)) {
-                    const evaluation = evaluateStrike(col, cat.id);
-                    if (evaluation.value < bestStrike.value) {
-                        bestStrike = { type: 'STREICHEN', category: cat.id, column: col, priority: evaluation.priority, value: evaluation.value };
-                    }
-                }
-            }
-        }
-        return bestStrike;
-    }
-
-    function evaluateEntry(dice, column, categoryId) {
-        const category = CATEGORIES.find(c => c.id === categoryId);
-        const score = calculateScore(categoryId, dice);
-        let calculatedPoints = score * COLUMN_MULTIPLIERS[column];
-        let priority = AI_PRIORITY.C_COLUMN1_BUFFER;
-
-        const highValueCats = ['kniffel', 'largeStraight', 'Full House', 'fourOfAKind'];
-        if (highValueCats.includes(categoryId)) {
-            priority = AI_PRIORITY.A_HIGH_VALUE;
-            if (column === 'col4' && !state.hasRolledMoreThanOnce) calculatedPoints *= 1.5;
-            else if (['col2', 'col3'].includes(column)) calculatedPoints *= 1.2;
-        } else if (category.isUpper) {
-            const counts = dice.filter(d => d === category.value).length;
-            if (counts >= 3) {
-                priority = AI_PRIORITY.B_BONUS_SECTION;
-                calculatedPoints *= 1.3;
-                if (counts >= 4) calculatedPoints *= 1.1;
-            }
-        } else if (categoryId === 'chance' && score < 20) {
-            return { value: -Infinity, priority: AI_PRIORITY.H_EMERGENCY_STRIKE };
-        } else if (categoryId === 'chance') {
-            priority = AI_PRIORITY.D_CHANCE;
-        }
-
-        if (column === 'col4' && category.isUpper) {
-            if (dice.filter(d => d === category.value).length < 3) {
-                 return { value: -Infinity, priority: AI_PRIORITY.H_EMERGENCY_STRIKE };
-            }
-        }
-
-        return { priority: priority, value: calculatedPoints };
-    }
-
-    function evaluateStrike(column, categoryId) {
-        let cost = 0;
-        let priority = AI_PRIORITY.F_STANDARD_STRIKE;
-
-        if (categoryId === 'ones' || categoryId === 'twos') { cost = 1; priority = AI_PRIORITY.E_STRATEGIC_STRIKE; }
-        else if (categoryId === 'kniffel') { cost = state.turn < 10 ? 100 : 20; }
-        else { cost = 30; }
-
-        if (column !== 'col1') {
-            cost = 100;
-            priority = AI_PRIORITY.H_EMERGENCY_STRIKE;
-        }
-        
-        return { priority, value: -cost };
-    }
-
-    function chooseDiceToKeep(dice) {
-        // This is a simplified heuristic version
-        let bestKeep = [false,false,false,false,false];
-        let maxEV = -Infinity;
-
-        for (let i = 0; i < 32; i++) {
-            let currentKeep = [];
-            let keptDice = [];
-            for (let j = 0; j < 5; j++) {
-                if ((i >> j) & 1) {
-                    currentKeep[j] = true;
-                    keptDice.push(dice[j]);
-                } else {
-                    currentKeep[j] = false;
-                }
-            }
-            
-            let ev = estimateRerollValue(keptDice);
-            if (ev > maxEV) {
-                maxEV = ev;
-                bestKeep = currentKeep;
-            }
-        }
-        return { bestKeep, expectedValue: maxEV };
-    }
-
-    function estimateRerollValue(keptDice) {
-        // Simple heuristic: value is based on the potential for high scores
-        let value = 0;
-        const counts = Array(7).fill(0);
-        keptDice.forEach(d => counts[d]++);
-
-        if (counts.some(c => c >= 3)) value += 20; // Good chance for 3/4 of a kind, full house
-        if (counts.some(c => c >= 4)) value += 40; // Very good chance for 4 of a kind/kniffel
-
-        const uniqueSorted = [...new Set(keptDice)].sort((a,b) => a-b).join('');
-        if (uniqueSorted.length >= 3) {
-            if (/123|234|345|456/.test(uniqueSorted)) value += 25; // Good chance for straight
-        }
-        if (uniqueSorted.length >= 4) {
-            if (/1234|2345|3456/.test(uniqueSorted)) value += 45; // Very good chance for straight
-        }
-        return value;
-    }
-
-    function canScore(dice, column, categoryId, rollNumber) {
-        if (column === 'col4' && rollNumber > 1) return false;
-        return calculateScore(categoryId, dice) > 0;
-    }
-
-    function isCellAvailableForComputer(category, column) {
-        if (state.scores.computer[column][category] !== null) return false;
-        const colNum = parseInt(column.replace('col', ''));
-        if (colNum === 1 || colNum === 4) return true;
-        if (colNum === 2) {
-            const index = TOP_DOWN_ORDER.indexOf(category);
-            return index === 0 || state.scores.computer[column][TOP_DOWN_ORDER[index - 1]] !== null;
-        }
-        if (colNum === 3) {
-            const reversedOrder = [...new Set(TOP_DOWN_ORDER)].reverse();
-            const index = reversedOrder.indexOf(category);
-            const correctReversedOrder = [...TOP_DOWN_ORDER].reverse();
-            const correctIndex = correctReversedOrder.indexOf(category);
-            return index === 0 || state.scores.computer[column][reversedOrder[index - 1]] !== null;
-        }
-        return false;
-    }
-
-    async function animateAIThinking(possibleMoves) {
-        const thinkCount = Math.min(possibleMoves.length, 3);
-        const shuffledMoves = [...possibleMoves].sort(() => 0.5 - Math.random());
-        for (let i = 0; i < thinkCount; i++) {
-            const move = shuffledMoves[i].action;
-            if (!move) continue;
-            const cell = document.getElementById(`computer-${move.category}-${move.column}`);
-            if (cell) {
-                cell.classList.add('ai-thinking');
-                await new Promise(res => setTimeout(res, 300));
-                cell.classList.remove('ai-thinking');
-            }
-        }
-    }
-
-    async function executeComputerMove(move) {
-        if (!move || !move.category || !move.column) { 
-            move = determineOptimalStrike();
-        }
-        if (state.settings.sound) {
-            computerChatterSeq.stop();
-            Tone.Transport.stop();
-            confirmBeep.triggerAttackRelease("A3", "16n");
-        }
-        const score = move.type === 'STREICHEN' ? -1 : calculateScore(move.category, state.dice);
-        state.scores.computer[move.column][move.category] = score;
-        state.lastAiMove = { category: move.category, column: move.column };
-
-        // --- LOGGING: KI-Eintrag/Streichen ---
-        if (state.settings.logGame) {
-            state.gameLog.push({
-                type: move.type === 'STREICHEN' ? 'strike' : 'entry',
-                player: 'computer',
-                category: move.category,
-                column: move.column,
-                score,
-                dice: state.dice.slice(),
-                turn: state.turn,
-                rollsLeft: state.rollsLeft,
-                timestamp: Date.now()
+        if (finalDecision.action === 'Eintragen') {
+            await executeComputerMoveNew({
+                type: 'EINTRAGEN',
+                category: finalDecision.details.category,
+                column: finalDecision.details.column
             });
+        } else if (finalDecision.action === 'Streichen') {
+            await executeComputerMoveNew({
+                type: 'STREICHEN',
+                category: finalDecision.details.category,
+                column: finalDecision.details.column
+            });
+        } else {
+            // Fallback: Finde ein Feld zum Streichen
+            const fallbackField = findAvailableFieldToStrike();
+            if (fallbackField) {
+                await executeComputerMoveNew({
+                    type: 'STREICHEN',
+                    category: fallbackField.category,
+                    column: fallbackField.column
+                });
+            }
         }
+    }
 
-        const chosenCell = document.getElementById(`computer-${move.category}-${move.column}`);
-        if(chosenCell) {
-            chosenCell.style.transition = 'background-color 0.2s';
-            chosenCell.style.backgroundColor = 'var(--lcars-orange)';
-            await new Promise(res => setTimeout(res, 1000));
-            chosenCell.style.backgroundColor = '';
+    // Hilfsfunktion für Fallback-Streichen
+    function findAvailableFieldToStrike() {
+        const priorities = [
+            { category: 'ones', column: 'col1' },
+            { category: 'twos', column: 'col1' },
+            { category: 'kniffel', column: 'col1' },
+            { category: 'chance', column: 'col1' }
+        ];
+        
+        for (const field of priorities) {
+            if (state.scores.computer[field.column][field.category] === null) {
+                return field;
+            }
         }
-        endTurn();
+        
+        // Falls alle Prioritätsfelder belegt sind, finde das erste freie Feld
+        for (let i = 1; i <= 4; i++) {
+            const col = `col${i}`;
+            for (const catId of TOP_DOWN_ORDER) {
+                if (state.scores.computer[col][catId] === null) {
+                    return { category: catId, column: col };
+                }
+            }
+        }
+        
+        return null;
     }
 
     // --- SCREENSHOT FUNCTIONALITY ---
