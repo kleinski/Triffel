@@ -584,13 +584,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         cell.innerHTML = ''; 
 
                         if (score !== null) {
-                            cell.textContent = score === -1 ? 'X' : score;
-                            cell.classList.add('filled');
                             if (score === -1) {
-                                cell.classList.add('struck');
+                                cell.innerHTML = '✗'; // Verwende ein X-Symbol statt "X"
+                                cell.classList.add('filled', 'struck');
+                            } else {
+                                cell.textContent = score;
+                                cell.classList.add('filled');
                             }
                         }
                     }
+                    // Nur positive Scores zur Summe hinzufügen (gestrichene Felder nicht)
                     if (score > 0) {
                         if (index < 6) { upperTotal += score; } 
                         else { lowerTotal += score; }
@@ -695,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 cell.innerHTML = score;
                                 cell.classList.add('available');
                             } else {
-                                cell.innerHTML = 'X';
+                                cell.innerHTML = '✗'; // Verwende das gleiche Symbol
                                 cell.classList.add('available', 'strikeable');
                             }
                         } else { // Preview mode
@@ -704,7 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     } else if (isFinalScoring) { // Only allow striking
-                        cell.innerHTML = 'X';
+                        cell.innerHTML = '✗'; // Verwende das gleiche Symbol
                         cell.classList.add('available', 'strikeable');
                     }
                 }
@@ -1422,7 +1425,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Speichere die Würfelwerte NACH dem Aufdecken
         currentDice = [...state.dice];
-        firstRollDice = [...state.dice];
+        firstRollDice = [...state.dice]; // ERSTWURF-WERTE HIER FESTHALTEN!
+        state.firstRollDice = [...state.dice]; // Auch im state speichern
         rollsRemaining--;
         state.rollsLeft = rollsRemaining;
 
@@ -1450,19 +1454,75 @@ document.addEventListener('DOMContentLoaded', () => {
             // Aktualisiere KI-Scorecard
             kiPlayer.scorecard = state.scores.computer;
             
-            // Bestimme aktuelle Würfel für Spalte 4 (nur Erstwurf)
-            const diceForDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
+            // WICHTIG: Für Spalte 4 immer die Erstwurfwerte verwenden!
             const rollNumber = 4 - rollsRemaining; // 1, 2, oder 3
             
-            const decision = kiPlayer.getBestAction(diceForDecision, rollNumber);
+            const decision = kiPlayer.getBestAction(currentDice, rollNumber);
 
             if (decision.action === 'Eintragen') {
-                await executeComputerMoveNew({
-                    type: 'EINTRAGEN',
-                    category: decision.details.category,
-                    column: decision.details.column
-                }, turnId);
-                return;
+                // SPEZIELLE BEHANDLUNG FÜR SPALTE 4
+                if (decision.details.column === 'col4') {
+                    // Für Spalte 4 nur Erstwurf erlaubt, aber nach 2+ Würfen sperren
+                    if (state.hasRolledMoreThanOnce) {
+                        console.log('KI: Spalte 4 nach mehrfachem Würfeln gesperrt');
+                        // Suche alternative Eintragung
+                        let alternativeFound = false;
+                        for (const column of ['col1', 'col2', 'col3']) {
+                            for (const category of kiPlayer.SCORE_CATEGORIES) {
+                                if (kiPlayer._isFieldAvailable(category, column)) {
+                                    const altScore = kiPlayer._calculateActionScore(currentDice, category, column, rollNumber);
+                                    if (altScore > -Infinity) {
+                                        await executeComputerMoveNew({
+                                            type: 'EINTRAGEN',
+                                            category: category,
+                                            column: column
+                                        }, turnId);
+                                        alternativeFound = true;
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        if (!alternativeFound) {
+                            // Fallback: Streichen
+                            const fallbackField = findAvailableFieldToStrike();
+                            if (fallbackField) {
+                                await executeComputerMoveNew({
+                                    type: 'STREICHEN',
+                                    category: fallbackField.category,
+                                    column: fallbackField.column
+                                }, turnId);
+                            }
+                        }
+                        return;
+                    } else {
+                        // Erster Wurf - verwende firstRollDice für Spalte 4
+                        const col4Score = calculateScore(decision.details.category, firstRollDice);
+                        if (col4Score > 0) {
+                            // Temporär die Würfel für die Berechnung setzen
+                            const originalDice = [...state.dice];
+                            state.dice = [...firstRollDice];
+                            
+                            await executeComputerMoveNew({
+                                type: 'EINTRAGEN',
+                                category: decision.details.category,
+                                column: decision.details.column
+                            }, turnId);
+                            
+                            // Würfel zurücksetzen
+                            state.dice = [...originalDice];
+                            return;
+                        }
+                    }
+                } else {
+                    // Normale Spalten - verwende aktuelle Würfel
+                    await executeComputerMoveNew({
+                        type: 'EINTRAGEN',
+                        category: decision.details.category,
+                        column: decision.details.column
+                    }, turnId);
+                    return;
+                }
             } else if (decision.action === 'Streichen') {
                 await executeComputerMoveNew({
                     type: 'STREICHEN',
@@ -1490,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 rollsRemaining--;
                 state.rollsLeft = rollsRemaining;
-                state.hasRolledMoreThanOnce = true;
+                state.hasRolledMoreThanOnce = true; // WICHTIG: Setze das Flag!
                 
                 // NÄCHSTER WURF - animiere und setze dann die Werte
                 await animateAndRollDice(diceToRollCount);
@@ -1501,6 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Speichere die neuen Würfelwerte NACH dem Aufdecken
                 currentDice = [...state.dice];
+                // firstRollDice NICHT überschreiben!
 
                 // --- LOGGING: KI-Wurf (weitere Würfe) ---
                 if (state.settings.logGame) {
@@ -1530,12 +1591,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Nach allen Würfen: Finale Entscheidung treffen
         kiPlayer.scorecard = state.scores.computer;
-        const diceForFinalDecision = state.hasRolledMoreThanOnce ? currentDice : firstRollDice;
-        const finalDecision = kiPlayer.getBestAction(diceForFinalDecision, 3);
+        const finalDecision = kiPlayer.getBestAction(currentDice, 3);
 
         console.log('KI finale Entscheidung:', finalDecision);
 
         if (finalDecision.action === 'Eintragen' && finalDecision.details) {
+            // SPEZIELLE BEHANDLUNG FÜR SPALTE 4 AUCH HIER
+            if (finalDecision.details.column === 'col4' && state.hasRolledMoreThanOnce) {
+                console.log('KI: Spalte 4 in finaler Entscheidung nach mehrfachem Würfeln gesperrt');
+                // Streiche stattdessen
+                const fallbackField = findAvailableFieldToStrike();
+                if (fallbackField) {
+                    await executeComputerMoveNew({
+                        type: 'STREICHEN',
+                        category: fallbackField.category,
+                        column: fallbackField.column
+                    }, turnId);
+                }
+                return;
+            }
+            
             await executeComputerMoveNew({
                 type: 'EINTRAGEN',
                 category: finalDecision.details.category,
